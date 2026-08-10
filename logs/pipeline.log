@@ -1,0 +1,20 @@
+2026-08-06 12:19:23.768 | INFO     | app.core.pipeline_logger:43 - ================================================================================
+2026-08-06 12:19:23.768 | INFO     | app.core.pipeline_logger:44 - 🚀 PIPELINE GATEWAY: STARTING MULTI-PLATFORM SCRAPING & EXTRACTION CYCLE
+2026-08-06 12:19:23.768 | INFO     | app.core.pipeline_logger:45 -    Config File: 'targets_config.json' | Audit Output File: 'scraped_events_output.json'
+2026-08-06 12:19:23.768 | INFO     | app.core.pipeline_logger:46 - ================================================================================
+2026-08-06 12:19:23.768 | INFO     | app.core.pipeline_logger:55 - [Stage 1/6] PostgreSQL Active Targets Fetch
+2026-08-06 12:19:32.666 | INFO     | app.core.pipeline_logger:55 - [Stage 2/6] Multi-Platform Scraping Producer Cycle — 26 active targets
+2026-08-06 12:23:29.192 | INFO     | app.core.pipeline_logger:55 - [Stage 3/6] PostgreSQL Watermark Synchronization
+2026-08-06 12:24:29.117 | INFO     | app.core.pipeline_logger:55 - [Stage 4/6] Post Processing & LLM Extraction — Processing 72 staged posts
+2026-08-06 12:30:32.441 | INFO     | app.core.pipeline_logger:55 - [Stage 6/6] Audit Report Export — Writing JSON output to 'scraped_events_output.json'
+2026-08-06 12:30:32.443 | SUCCESS  | app.core.pipeline_logger:69 - 🎉 PIPELINE GATEWAY COMPLETED SUCCESSFULLY in 668.68s! Scraped 72 posts, extracted 14 events.
+2026-08-06 12:34:36.655 | INFO     | app.core.pipeline_logger:43 - ================================================================================
+2026-08-06 12:34:36.655 | INFO     | app.core.pipeline_logger:44 - 🚀 PIPELINE GATEWAY: STARTING MULTI-PLATFORM SCRAPING & EXTRACTION CYCLE
+2026-08-06 12:34:36.655 | INFO     | app.core.pipeline_logger:45 -    Config File: 'targets_config.json' | Audit Output File: 'scraped_events_output.json'
+2026-08-06 12:34:36.655 | INFO     | app.core.pipeline_logger:46 - ================================================================================
+2026-08-06 12:34:36.655 | INFO     | app.core.pipeline_logger:55 - [Stage 1/6] PostgreSQL Active Targets Fetch
+2026-08-06 12:34:48.751 | INFO     | app.core.pipeline_logger:55 - [Stage 2/6] Multi-Platform Scraping Producer Cycle — 26 active targets
+2026-08-06 12:38:31.581 | INFO     | app.core.pipeline_logger:55 - [Stage 3/6] PostgreSQL Watermark Synchronization
+2026-08-06 12:39:18.789 | INFO     | app.core.pipeline_logger:55 - [Stage 4/6] Post Processing & LLM Extraction — Processing 26 staged posts
+2026-08-06 12:43:09.557 | INFO     | app.core.pipeline_logger:55 - [Stage 6/6] Audit Report Export — Writing JSON output to 'scraped_events_output.json'
+2026-08-06 12:43:09.560 | SUCCESS  | app.core.pipeline_logger:69 - 🎉 PIPELINE GATEWAY COMPLETED SUCCESSFULLY in 512.91s! Scraped 26 posts, extracted 8 events.
