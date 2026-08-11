@@ -122,6 +122,7 @@ jobs:
             JWT_ALGORITHM="${{ secrets.JWT_ALGORITHM || 'HS256' }}"
             JWT_ACCESS_TOKEN_EXPIRE_DAYS="${{ secrets.JWT_ACCESS_TOKEN_EXPIRE_DAYS || '30' }}"
             GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}"
+            PIPELINE_API_KEY="${{ secrets.PIPELINE_API_KEY }}"
 
             TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
             MINI_APP_URL="${{ secrets.MINI_APP_URL }}"
