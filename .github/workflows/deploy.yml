@@ -144,11 +144,13 @@ jobs:
             chmod 600 .env
 
             # Write docker-compose.yml on server pointing to GHCR image
-            IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            IMAGE_REPO=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+            IMAGE_TAG="${IMAGE_REPO}:latest"
+
             cat <<EOF > docker-compose.yml
             services:
               api:
-                image: $${IMAGE_TAG}
+                image: ${IMAGE_TAG}
                 container_name: paza_event_api
                 restart: always
                 env_file:
@@ -159,7 +161,7 @@ jobs:
                   - static_data:/app/static
 
               bot:
-                image: $${IMAGE_TAG}
+                image: ${IMAGE_TAG}
                 container_name: paza_event_bot
                 restart: always
                 command: ["python", "run_bot.py"]
