@@ -63,6 +63,27 @@ class Settings(BaseSettings):
     CLOUDINARY_API_SECRET: str = ""
     CLOUDINARY_URL: str = ""
 
+    from pydantic import field_validator
+
+    @field_validator(
+        "PORT",
+        "POSTGRES_PORT",
+        "REDIS_PORT",
+        "JWT_ACCESS_TOKEN_EXPIRE_DAYS",
+        mode="before",
+    )
+    @classmethod
+    def parse_empty_int(cls, v, info):
+        if v == "" or v is None:
+            defaults = {
+                "PORT": 8000,
+                "POSTGRES_PORT": 5432,
+                "REDIS_PORT": 6379,
+                "JWT_ACCESS_TOKEN_EXPIRE_DAYS": 30,
+            }
+            return defaults.get(info.field_name, 30)
+        return int(v)
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -119,8 +119,8 @@ jobs:
             GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}"
 
             JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}"
-            JWT_ALGORITHM="${{ secrets.JWT_ALGORITHM }}"
-            JWT_ACCESS_TOKEN_EXPIRE_DAYS="${{ secrets.JWT_ACCESS_TOKEN_EXPIRE_DAYS }}"
+            JWT_ALGORITHM="${{ secrets.JWT_ALGORITHM || 'HS256' }}"
+            JWT_ACCESS_TOKEN_EXPIRE_DAYS="${{ secrets.JWT_ACCESS_TOKEN_EXPIRE_DAYS || '30' }}"
             GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}"
 
             TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
