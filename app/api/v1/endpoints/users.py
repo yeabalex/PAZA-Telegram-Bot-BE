@@ -44,7 +44,7 @@ async def get_current_user_profile(
 
     # Verify Telegram WebApp initData if provided
     if init_data:
-        bot_token = getattr(settings, "TELEGRAM_BOT_TOKEN", "8499714529:AAhVuQ4zBf7RBhsyDVvkiAMJSz0qU4Dh3Pc")
+        bot_token = settings.TELEGRAM_BOT_TOKEN
         tg_user = verify_telegram_init_data(init_data, bot_token)
         if tg_user and "id" in tg_user:
             target_tg_id = int(tg_user["id"])
