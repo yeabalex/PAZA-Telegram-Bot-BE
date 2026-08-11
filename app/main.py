@@ -32,10 +32,6 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS screenshot_url TEXT;"))
             await conn.execute(text("ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50);"))
         logger.info("Database tables initialized successfully.")
-        
-        # Seed default interest categories & scraper targets into PostgreSQL
-        from seed_interests import run_all_seeds
-        await run_all_seeds()
     except Exception as e:
         logger.error(f"Error creating database tables: {e}")
     yield

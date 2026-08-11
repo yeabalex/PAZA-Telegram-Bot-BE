@@ -68,7 +68,7 @@ async def seed_interests():
 async def seed_targets():
     import json
     from pathlib import Path
-    from app.db.models import ScraperTargetModel
+    from app.db.models import ScraperTargetDB, ScraperPlatformEnum, ScraperTargetType
 
     config_path = Path("targets_config.json")
     if not config_path.exists():
@@ -82,10 +82,13 @@ async def seed_targets():
     async with AsyncSessionLocal() as session:
         count = 0
         for item in targets_list:
-            stmt = insert(ScraperTargetModel).values(
-                platform=item["platform"],
-                target_type=item.get("target_type", "username"),
-                target_value=item["value"].strip(),
+            plat_enum = ScraperPlatformEnum(item["platform"].lower())
+            ttype_enum = ScraperTargetType(item.get("target_type", "username").lower())
+
+            stmt = insert(ScraperTargetDB).values(
+                platform=plat_enum,
+                target_type=ttype_enum,
+                value=item["value"].strip(),
                 max_posts_per_cycle=item.get("max_posts", 5),
                 last_watermark=str(item.get("last_watermark", "0")),
                 is_active=item.get("is_active", True)
