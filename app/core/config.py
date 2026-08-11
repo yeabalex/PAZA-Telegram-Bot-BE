@@ -36,14 +36,14 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
 
     # Security / Auth Settings
-    JWT_SECRET_KEY: str = "paza-organizer-jwt-secret-key-2026-super-secure"
+    JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_DAYS: int = 30
-    GOOGLE_CLIENT_ID: str = "233035228390-fd3qehddqm8rsjuh53pqcj396nvlo6dl.apps.googleusercontent.com"
+    GOOGLE_CLIENT_ID: str = ""
 
     # Telegram Bot & Mini App Settings
-    TELEGRAM_BOT_TOKEN: str = "8499714529:AAHVuQ4zBf7RBhsyDVvkiAMJSzOqU4Dh3Pc"
-    MINI_APP_URL: str = "https://691b-196-188-252-126.ngrok-free.app"
+    TELEGRAM_BOT_TOKEN: str = ""
+    MINI_APP_URL: str = ""
 
     # Scraper Session Cookies
     INSTAGRAM_SESSION_ID: str = ""
