@@ -47,5 +47,9 @@ htmlcov/
 *.tfstate.backup
 *.tfvars
 !terraform.tfvars.example
-.terraform.lock.hcl
+# Secrets & Keys
+*.pem
+*.key
+*.crt
+
 
