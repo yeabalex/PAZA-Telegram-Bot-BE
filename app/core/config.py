@@ -36,14 +36,14 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
 
     # Security / Auth Settings
-    JWT_SECRET_KEY: str = "REDACTED_JWT_SECRET"
+    JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_DAYS: int = 30
-    GOOGLE_CLIENT_ID: str = "REDACTED_GOOGLE_CLIENT_ID"
+    GOOGLE_CLIENT_ID: str = ""
 
     # Telegram Bot & Mini App Settings
-    TELEGRAM_BOT_TOKEN: str = "REDACTED_BOT_TOKEN"
-    MINI_APP_URL: str = "https://REDACTED_NGROK_HOST"
+    TELEGRAM_BOT_TOKEN: str = ""
+    MINI_APP_URL: str = ""
 
     # Scraper Session Cookies
     INSTAGRAM_SESSION_ID: str = ""
