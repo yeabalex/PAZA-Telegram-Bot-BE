@@ -65,8 +65,49 @@ async def seed_interests():
             count += 1
 
         await session.commit()
-        logger.info(f"Successfully seeded/upserted {count} default interests in PostgreSQL database!")
+async def seed_targets():
+    import json
+    from pathlib import Path
+    from app.db.models import ScraperTargetModel
+
+    config_path = Path("targets_config.json")
+    if not config_path.exists():
+        logger.warning("targets_config.json not found, skipping target seeding.")
+        return
+
+    logger.info("Seeding scraper targets from targets_config.json into PostgreSQL...")
+    with open(config_path, "r", encoding="utf-8") as f:
+        targets_list = json.load(f)
+
+    async with AsyncSessionLocal() as session:
+        count = 0
+        for item in targets_list:
+            stmt = insert(ScraperTargetModel).values(
+                platform=item["platform"],
+                target_type=item.get("target_type", "username"),
+                target_value=item["value"].strip(),
+                max_posts_per_cycle=item.get("max_posts", 5),
+                last_watermark=str(item.get("last_watermark", "0")),
+                is_active=item.get("is_active", True)
+            )
+            upsert_stmt = stmt.on_conflict_do_update(
+                constraint="uq_scraper_target",
+                set_={
+                    "max_posts_per_cycle": item.get("max_posts", 5),
+                    "is_active": item.get("is_active", True),
+                }
+            )
+            await session.execute(upsert_stmt)
+            count += 1
+
+        await session.commit()
+        logger.info(f"Successfully seeded/upserted {count} scraper targets in PostgreSQL database!")
+
+
+async def run_all_seeds():
+    await seed_interests()
+    await seed_targets()
 
 
 if __name__ == "__main__":
-    asyncio.run(seed_interests())
+    asyncio.run(run_all_seeds())
