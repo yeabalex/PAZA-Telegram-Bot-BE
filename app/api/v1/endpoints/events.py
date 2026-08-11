@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.security import require_telegram_user
 from app.db.session import get_db
 from app.services.cache.redis_event_storage import RedisEventStorage
 from app.services.event.event_repository import EventRepository
@@ -25,6 +26,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 redis_event_storage = RedisEventStorage()
 
+
+# ════════════════════════════════════════════════════════════════════════════════
+# PUBLIC READ ENDPOINTS (no auth required)
+# ════════════════════════════════════════════════════════════════════════════════
 
 @router.get(
     "/categories",
@@ -105,93 +110,23 @@ async def list_all_active_events(
     return scraped + organizer
 
 
-@router.post(
-    "/save-scraped",
-    summary="Save Scraped Event to PostgreSQL DB",
-    description="Stores a scraped event as raw JSON in permanent PostgreSQL storage for a user."
-)
-async def save_scraped_event(
-    payload: SaveScrapedEventRequest,
-    db: AsyncSession = Depends(get_db)
-):
-    try:
-        await EventRepository.save_scraped_event(
-            db=db,
-            telegram_id=payload.telegram_id,
-            event_id=payload.event_id,
-            event_data=payload.event_data,
-        )
-        return {"status": "success", "message": "Scraped event saved to DB"}
-    except Exception as e:
-        await db.rollback()
-        logger.error(f"Failed to save scraped event: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
-        )
-
-
-@router.delete(
-    "/save-scraped",
-    summary="Un-save Scraped Event from PostgreSQL DB",
-)
-async def remove_saved_scraped_event(
-    telegram_id: int = Query(...),
-    event_id: str = Query(...),
-    db: AsyncSession = Depends(get_db)
-):
-    try:
-        removed = await EventRepository.remove_saved_scraped_event(
-            db=db, telegram_id=telegram_id, event_id=event_id
-        )
-        if removed:
-            return {"status": "success", "message": "Event removed from DB"}
-        return {"status": "not_found", "message": "Event was not saved"}
-    except Exception as e:
-        await db.rollback()
-        logger.error(f"Failed to remove saved scraped event: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
-        )
-
-
 @router.get(
-    "/saved-scraped",
-    response_model=List[dict],
-    summary="Get User's Saved Scraped Events from PostgreSQL DB",
+    "/detail/{event_id:path}",
+    response_model=EventDetailSchema,
+    summary="Get Full Event Details",
+    description="Fetches full details including description and images for a specific event ID."
 )
-async def get_saved_scraped_events(
-    telegram_id: int = Query(...),
+async def get_event_detail(
+    event_id: str,
     db: AsyncSession = Depends(get_db)
 ):
-    try:
-        return await EventRepository.get_saved_scraped_events(db=db, telegram_id=telegram_id)
-    except Exception as e:
-        logger.error(f"Failed to fetch saved scraped events: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
-        )
+    detail = await EventRepository.get_event_detail(
+        db=db, redis_storage=redis_event_storage, event_id=event_id
+    )
+    if detail:
+        return detail
 
-
-@router.get(
-    "/user-rsvps",
-    response_model=List[dict],
-    summary="Get User's RSVP'd Events from PostgreSQL DB",
-)
-async def get_user_rsvps(
-    telegram_id: int = Query(...),
-    db: AsyncSession = Depends(get_db)
-):
-    try:
-        return await EventRepository.get_user_rsvps(db=db, redis_storage=redis_event_storage, telegram_id=telegram_id)
-    except Exception as e:
-        logger.error(f"Failed to fetch user rsvp events: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
-        )
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event detail not found")
 
 
 @router.get(
@@ -221,75 +156,6 @@ async def verify_ticket(
 
 
 @router.get(
-    "/detail/{event_id:path}",
-    response_model=EventDetailSchema,
-    summary="Get Full Event Details",
-    description="Fetches full details including description and images for a specific event ID."
-)
-async def get_event_detail(
-    event_id: str,
-    db: AsyncSession = Depends(get_db)
-):
-    detail = await EventRepository.get_event_detail(
-        db=db, redis_storage=redis_event_storage, event_id=event_id
-    )
-    if detail:
-        return detail
-
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event detail not found")
-
-
-# ════════════════════════════════════════════════════════════════════════════════
-# RSVP ("Going") ENDPOINTS
-# ════════════════════════════════════════════════════════════════════════════════
-
-@router.post(
-    "/rsvp",
-    summary="Mark user as Going to an event",
-    description="Creates or updates an RSVP for the given event. Stores TG profile info and optional message.",
-)
-async def mark_going(
-    body: RsvpRequest,
-    db: AsyncSession = Depends(get_db)
-):
-    try:
-        await EventRepository.mark_rsvp(db=db, body=body)
-        return {"status": "success", "message": "RSVP saved"}
-    except Exception as e:
-        await db.rollback()
-        logger.error(f"Failed to save RSVP: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
-        )
-
-
-@router.delete(
-    "/rsvp",
-    summary="Remove user's RSVP from an event",
-)
-async def remove_going(
-    event_id: str = Query(...),
-    telegram_id: int = Query(...),
-    db: AsyncSession = Depends(get_db)
-):
-    try:
-        removed = await EventRepository.remove_rsvp(
-            db=db, event_id=event_id, telegram_id=telegram_id
-        )
-        if removed:
-            return {"status": "success", "message": "RSVP removed"}
-        return {"status": "not_found", "message": "RSVP was not found"}
-    except Exception as e:
-        await db.rollback()
-        logger.error(f"Failed to remove RSVP: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Database error: {str(e)}"
-        )
-
-
-@router.get(
     "/rsvp",
     response_model=List[RsvpUserSchema],
     summary="List all RSVPs for an event",
@@ -308,13 +174,170 @@ async def list_rsvps(
         )
 
 
+# ════════════════════════════════════════════════════════════════════════════════
+# PROTECTED USER-ACTION ENDPOINTS (Telegram initData required)
+# ════════════════════════════════════════════════════════════════════════════════
+
+@router.post(
+    "/save-scraped",
+    summary="Save Scraped Event to PostgreSQL DB",
+    description="Stores a scraped event as raw JSON in permanent PostgreSQL storage for a user. Requires X-Telegram-Init-Data header."
+)
+async def save_scraped_event(
+    payload: SaveScrapedEventRequest,
+    tg_user: dict = Depends(require_telegram_user),
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        # Use verified telegram_id from initData
+        verified_tg_id = int(tg_user["id"])
+        await EventRepository.save_scraped_event(
+            db=db,
+            telegram_id=verified_tg_id,
+            event_id=payload.event_id,
+            event_data=payload.event_data,
+        )
+        return {"status": "success", "message": "Scraped event saved to DB"}
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to save scraped event: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}"
+        )
+
+
+@router.delete(
+    "/save-scraped",
+    summary="Un-save Scraped Event from PostgreSQL DB",
+    description="Requires X-Telegram-Init-Data header.",
+)
+async def remove_saved_scraped_event(
+    event_id: str = Query(...),
+    tg_user: dict = Depends(require_telegram_user),
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        # Use verified telegram_id from initData
+        verified_tg_id = int(tg_user["id"])
+        removed = await EventRepository.remove_saved_scraped_event(
+            db=db, telegram_id=verified_tg_id, event_id=event_id
+        )
+        if removed:
+            return {"status": "success", "message": "Event removed from DB"}
+        return {"status": "not_found", "message": "Event was not saved"}
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to remove saved scraped event: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}"
+        )
+
+
+@router.get(
+    "/saved-scraped",
+    response_model=List[dict],
+    summary="Get User's Saved Scraped Events from PostgreSQL DB",
+    description="Requires X-Telegram-Init-Data header.",
+)
+async def get_saved_scraped_events(
+    tg_user: dict = Depends(require_telegram_user),
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        verified_tg_id = int(tg_user["id"])
+        return await EventRepository.get_saved_scraped_events(db=db, telegram_id=verified_tg_id)
+    except Exception as e:
+        logger.error(f"Failed to fetch saved scraped events: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}"
+        )
+
+
+@router.get(
+    "/user-rsvps",
+    response_model=List[dict],
+    summary="Get User's RSVP'd Events from PostgreSQL DB",
+    description="Requires X-Telegram-Init-Data header.",
+)
+async def get_user_rsvps(
+    tg_user: dict = Depends(require_telegram_user),
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        verified_tg_id = int(tg_user["id"])
+        return await EventRepository.get_user_rsvps(db=db, redis_storage=redis_event_storage, telegram_id=verified_tg_id)
+    except Exception as e:
+        logger.error(f"Failed to fetch user rsvp events: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}"
+        )
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# RSVP ("Going") ENDPOINTS
+# ════════════════════════════════════════════════════════════════════════════════
+
+@router.post(
+    "/rsvp",
+    summary="Mark user as Going to an event",
+    description="Creates or updates an RSVP for the given event. Requires X-Telegram-Init-Data header.",
+)
+async def mark_going(
+    body: RsvpRequest,
+    tg_user: dict = Depends(require_telegram_user),
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        await EventRepository.mark_rsvp(db=db, body=body)
+        return {"status": "success", "message": "RSVP saved"}
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to save RSVP: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}"
+        )
+
+
+@router.delete(
+    "/rsvp",
+    summary="Remove user's RSVP from an event",
+    description="Requires X-Telegram-Init-Data header.",
+)
+async def remove_going(
+    event_id: str = Query(...),
+    tg_user: dict = Depends(require_telegram_user),
+    db: AsyncSession = Depends(get_db)
+):
+    try:
+        verified_tg_id = int(tg_user["id"])
+        removed = await EventRepository.remove_rsvp(
+            db=db, event_id=event_id, telegram_id=verified_tg_id
+        )
+        if removed:
+            return {"status": "success", "message": "RSVP removed"}
+        return {"status": "not_found", "message": "RSVP was not found"}
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to remove RSVP: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error: {str(e)}"
+        )
+
+
 @router.post(
     "/upload-receipt",
     summary="Upload RSVP Payment Receipt Screenshot",
-    description="Uploads RSVP payment receipt screenshot to Cloudinary / R2 CDN."
+    description="Uploads RSVP payment receipt screenshot to Cloudinary / R2 CDN. Requires X-Telegram-Init-Data header."
 )
 async def upload_rsvp_receipt(
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    tg_user: dict = Depends(require_telegram_user),
 ):
     try:
         if cloudinary_storage_service._is_configured():
@@ -333,7 +356,7 @@ async def upload_rsvp_receipt(
 @router.post(
     "/send-invite",
     summary="Send Event Invite with Artwork via Telegram Bot",
-    description="Uploads generated invite artwork image and sends a photo message via Telegram bot to the invited user."
+    description="Uploads generated invite artwork image and sends a photo message via Telegram bot to the invited user. Requires X-Telegram-Init-Data header."
 )
 async def send_event_invite(
     event_id: str = Form(...),
@@ -343,6 +366,7 @@ async def send_event_invite(
     invitee_username: Optional[str] = Form(None),
     vibe: Optional[str] = Form("casual"),
     image: Optional[UploadFile] = File(None),
+    tg_user: dict = Depends(require_telegram_user),
     db: AsyncSession = Depends(get_db)
 ):
     try:

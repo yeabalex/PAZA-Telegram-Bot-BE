@@ -112,3 +112,48 @@ def verify_telegram_init_data(init_data: str, bot_token: str, max_age_seconds: i
         logger.warning(f"Telegram initData verification error: {e}")
     return None
 
+
+# ════════════════════════════════════════════════════════════════════════════════
+# FastAPI Reusable Auth Dependencies
+# ════════════════════════════════════════════════════════════════════════════════
+
+from fastapi import Header, HTTPException, status
+
+
+async def require_api_key(x_api_key: str = Header(..., alias="X-Api-Key")) -> str:
+    """Validates the X-Api-Key header against PIPELINE_API_KEY.
+
+    Use as a dependency on server-to-server routes (scraper trigger, cron jobs).
+    Raises 403 if the key is missing, empty, or does not match.
+    """
+    if not settings.PIPELINE_API_KEY:
+        logger.error("PIPELINE_API_KEY is not configured on the server — rejecting request.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Server API key not configured.",
+        )
+    if not hmac.compare_digest(x_api_key, settings.PIPELINE_API_KEY):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid API key.",
+        )
+    return x_api_key
+
+
+async def require_telegram_user(
+    x_telegram_init_data: str = Header(..., alias="X-Telegram-Init-Data"),
+) -> dict:
+    """Validates Telegram WebApp initData from the X-Telegram-Init-Data header.
+
+    Use as a dependency on Mini App user-action routes (RSVP, save, invite, etc.).
+    Returns the verified Telegram user dict (contains 'id', 'first_name', etc.)
+    or raises 401 if verification fails.
+    """
+    tg_user = verify_telegram_init_data(x_telegram_init_data, settings.TELEGRAM_BOT_TOKEN)
+    if not tg_user or "id" not in tg_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired Telegram initData.",
+        )
+    return tg_user
+

@@ -463,7 +463,8 @@ async def upload_event_image(
 @router.get(
     "/categories",
     summary="List Database Event Categories / Interests",
-    description="Returns all normalized categories stored in PostgreSQL interests table."
+    description="Returns all normalized categories stored in PostgreSQL interests table. Requires Bearer token.",
+    dependencies=[Depends(get_current_user_id_from_token)],
 )
 async def list_db_categories(db: AsyncSession = Depends(get_db)):
     stmt = select(Interest).order_by(Interest.name_en.asc())

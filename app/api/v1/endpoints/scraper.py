@@ -1,19 +1,14 @@
 """Scraper & Pipeline Trigger Endpoint."""
 
 import logging
-from typing import Optional
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Security, status
-from fastapi.security.api_key import APIKeyHeader
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
+from app.core.security import require_api_key
 from app.services.pipeline_gateway import run_pipeline_gateway
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# Optional API Key authorization for cron trigger protection
-API_KEY_NAME = "X-Cron-Secret"
-api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 
 class TriggerResponse(BaseModel):
@@ -36,15 +31,15 @@ async def background_pipeline_runner():
     response_model=TriggerResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Trigger Scraper Pipeline (Cron Gateway Endpoint)",
-    description="Endpoint for Cron jobs or webhooks to trigger the multi-platform scraping & event extraction pipeline."
+    description="Endpoint for Cron jobs or webhooks to trigger the multi-platform scraping & event extraction pipeline. Requires X-Api-Key header.",
+    dependencies=[Depends(require_api_key)],
 )
 async def trigger_scraper_pipeline(
     background_tasks: BackgroundTasks,
     async_mode: bool = Query(True, description="If True, runs pipeline asynchronously in background"),
-    api_key: Optional[str] = Security(api_key_header)
 ):
     """Gateway endpoint called by Cron jobs or external webhooks to start pipeline execution."""
-    logger.info("Pipeline trigger received via API endpoint.")
+    logger.info("Pipeline trigger received via API endpoint (authenticated).")
 
     if async_mode:
         background_tasks.add_task(background_pipeline_runner)
@@ -68,3 +63,4 @@ async def trigger_scraper_pipeline(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Pipeline execution failed: {str(e)}"
         )
+

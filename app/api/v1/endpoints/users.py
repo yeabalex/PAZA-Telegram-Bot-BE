@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.security import verify_telegram_init_data
+from app.core.security import require_api_key, require_telegram_user, verify_telegram_init_data
 from app.db.session import get_db
 from app.schemas.user import (
     BotStartRequest,
@@ -95,7 +95,8 @@ async def get_current_user_profile(
     "/bot-start",
     response_model=UserProfileSchema,
     summary="Bot /start Registration Initializer",
-    description="Called by Telegram Bot when user sends /start. Creates or fetches user profile in PostgreSQL."
+    description="Called by Telegram Bot when user sends /start. Creates or fetches user profile in PostgreSQL. Requires X-Api-Key header.",
+    dependencies=[Depends(require_api_key)],
 )
 async def bot_start_register(
     req: BotStartRequest,
@@ -118,7 +119,8 @@ async def bot_start_register(
     "/phone-number",
     response_model=UserProfileSchema,
     summary="Update User Phone Number (Bot Contact Share)",
-    description="Updates user's phone number when they share their contact button in Telegram Bot."
+    description="Updates user's phone number when they share their contact button in Telegram Bot. Requires X-Api-Key header.",
+    dependencies=[Depends(require_api_key)],
 )
 async def update_phone_number(
     req: PhoneNumberUpdateRequest,
@@ -151,14 +153,17 @@ async def list_all_interests(db: AsyncSession = Depends(get_db)):
 @router.post(
     "/interests",
     summary="Update User Selected Interests",
-    description="Links user's selected interest slugs to their profile in user_interests table."
+    description="Links user's selected interest slugs to their profile in user_interests table. Requires X-Telegram-Init-Data header.",
 )
 async def update_user_interests(
     req: InterestSelectionRequest,
+    tg_user: dict = Depends(require_telegram_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Updates user's selected interests in normalized junction table."""
-    matching_interests = await UserRepository.update_user_interests(db, req.telegram_id, req.interest_slugs)
+    # Use the verified telegram_id from initData, not from request body
+    verified_tg_id = int(tg_user["id"])
+    matching_interests = await UserRepository.update_user_interests(db, verified_tg_id, req.interest_slugs)
     if matching_interests is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -167,7 +172,7 @@ async def update_user_interests(
 
     return {
         "message": f"Successfully updated {len(matching_interests)} interests for user.",
-        "telegram_id": req.telegram_id,
+        "telegram_id": verified_tg_id,
         "selected_slugs": [i.slug for i in matching_interests]
     }
 
@@ -183,10 +188,11 @@ class UserSearchResult(BaseModel):
     "/search",
     response_model=List[UserSearchResult],
     summary="Search Registered Users by Username or Name",
-    description="Debounced search endpoint for finding users to invite."
+    description="Debounced search endpoint for finding users to invite. Requires X-Telegram-Init-Data header.",
 )
 async def search_users(
     query: str = Query(..., min_length=1, description="Username or full name query"),
+    tg_user: dict = Depends(require_telegram_user),
     db: AsyncSession = Depends(get_db)
 ):
     clean_q = query.strip().lstrip("@").lower()
@@ -230,4 +236,3 @@ async def search_users(
     except Exception as e:
         logger.error(f"Error searching users: {e}")
         return []
-

@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_DAYS: int = 30
     GOOGLE_CLIENT_ID: str = ""
+    PIPELINE_API_KEY: str = ""
 
     # Telegram Bot & Mini App Settings
     TELEGRAM_BOT_TOKEN: str = ""
