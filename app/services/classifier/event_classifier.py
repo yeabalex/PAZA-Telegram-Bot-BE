@@ -65,32 +65,43 @@ class EventClassifier:
         """Extract explicit structural indicators (dates, times, prices, venue keywords)."""
         text_lower = text.lower()
 
-        # Date signals
-        date_patterns = r'(?i)\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|ነሐሴ|ጳጉሜ|መስከረም|ጥቅምት|ሕዳር|ታኅሣሥ|ጥር|የካቲት|መጋቢት|ሚያዝያ|ግንቦት|ሰኔ|ሐምሌ)\b|\b\d{1,2}\s*[-/.]\s*\d{1,2}\s*[-/.]\s*\d{2,4}\b'
+        # Date signals (Months, Days of Week, Date Formats)
+        date_patterns = (
+            r'(?i)\b(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december|'
+            r'monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|'
+            r'ነሐሴ|ጳጉሜ|መስከረም|ጥቅምት|ሕዳር|ታኅሣሥ|ጥር|የካቲት|መጋቢት|ሚያዝያ|ግንቦት|ሰኔ|ሐምሌ|'
+            r'ሰኞ|ማክሰኞ|ረቡዕ|ሐሙስ|አርብ|ቅዳሜ|እሁድ)\b|\b\d{1,2}\s*[-/.]\s*\d{1,2}(\s*[-/.]\s*\d{2,4})?\b'
+        )
         has_date = bool(re.search(date_patterns, text))
 
         # Time signals
-        time_patterns = r'(?i)\b\d{1,2}(:\d{2})?\s*(am|pm|ምሽት|ቀን|ጠዋት|ሰዓት)\b'
+        time_patterns = r'(?i)\b\d{1,2}(:\d{2})?\s*(am|pm|hrs?|o\'clock|ምሽት|ቀን|ጠዋት|ሰዓት)\b'
         has_time = bool(re.search(time_patterns, text))
 
-        # Price / Ticket signals
-        price_patterns = r'(?i)\b\d+\s*(birr|etb|ብር)\b|\b(free entrance|entrance free|ነፃ|መግቢያ|ticket|ቲኬት)\b'
+        # Price / Reservation / Ticket signals
+        price_patterns = r'(?i)\b\d+\s*(birr|etb|ብር)\b|\b(free entrance|entrance free|free entry|entry free|ነፃ|መግቢያ|ticket|tickets|ቲኬት|reservation|reservations|booking)\b'
         has_price = bool(re.search(price_patterns, text))
 
-        # Venue / Location signals
-        venue_patterns = r'(?i)\b(venue|location|park|hotel|hall|lounge|cinema|ቦታ|ፓርክ|ሆቴል|አዳራሽ|ሲኒማ|ፊትለፊት|አጠገብ)\b'
+        # Venue / Location / Address signals
+        venue_patterns = (
+            r'(?i)\b(venue|location|located|park|hotel|hall|lounge|cinema|bar|restaurant|pub|club|bistro|cafe|kafi|center|centre|building|square|street|road|intersection|subcity|bole|atlas|kazanchis|piassa|sarbet|gotera|cmc|'
+            r'ቦታ|ፓርክ|ሆቴል|አዳራሽ|ሲኒማ|ባር|ሬስቶራንት|ካፌ|ፊትለፊት|አጠገብ)\b'
+        )
         has_venue = bool(re.search(venue_patterns, text))
 
-        # Event keywords
-        event_keywords = r'(?i)\b(bazaar|concert|expo|festival|party|night|show|exhibition|ባዛር|ኮንሰርት|ኤግዚቢሽን|ፌስቲቫል|ድግስ|ዝግጅት)\b'
+        # Event keywords & Hosting verbs
+        event_keywords = (
+            r'(?i)\b(event|events|hosting|host|hosts|presents|presents:|bazaar|concert|expo|festival|party|night|show|exhibition|edition|music|culture|live|dj|performance|comedy|hangout|meetup|summit|conference|workshop|'
+            r'ኢቨንት|ባዛር|ኮንሰርት|ኤግዚቢሽን|ፌስቲቫል|ድግስ|ዝግጅት|ምሽት)\b'
+        )
         has_event_kw = bool(re.search(event_keywords, text))
 
         score = 0.0
-        if has_event_kw: score += 0.25
-        if has_date: score += 0.25
+        if has_event_kw: score += 0.30
+        if has_date: score += 0.30
+        if has_venue: score += 0.25
+        if has_price: score += 0.15
         if has_time: score += 0.15
-        if has_price: score += 0.20
-        if has_venue: score += 0.15
 
         return {
             "structural_score": min(score, 1.0),
@@ -112,8 +123,8 @@ class EventClassifier:
         struct_meta = self._extract_structural_signals(text)
         struct_score = struct_meta["structural_score"]
 
-        # Fast Pass: If strong structural signals exist (e.g. event keyword + date + price)
-        if struct_score >= 0.60:
+        # Fast Pass: If event keyword + date or venue signals exist (score >= 0.35)
+        if struct_score >= 0.35:
             return True, struct_score, {
                 "method": "structural_fast_pass",
                 "structural": struct_meta,
