@@ -234,10 +234,14 @@ class WhisperTranscriber:
         self,
         post_url: Optional[str],
         current_caption: str,
-        min_caption_len: int = 150
+        min_caption_len: int = 500
     ) -> str:
-        """Download and transcribe video audio if current caption text is short (< min_caption_len)."""
-        if not post_url or len(current_caption.strip()) >= min_caption_len:
+        """Download and transcribe video audio for Instagram Reels & TikTok posts if caption is under min_caption_len."""
+        if not post_url:
+            return current_caption
+
+        # If caption is already extremely detailed (>500 chars), skip extra audio download to save bandwidth
+        if len(current_caption.strip()) >= min_caption_len:
             return current_caption
 
         logger.info(f"Short caption detected ({len(current_caption)} chars). Transcribing video audio for {post_url}...")
