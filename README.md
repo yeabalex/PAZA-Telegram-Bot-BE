@@ -1,6 +1,6 @@
-# Addis Event Bot - Telegram Bot Backend
+# Paza Event Bot - Telegram Bot Backend
 
-FastAPI backend application for Addis Event Bot.
+FastAPI backend application for Paza Event Bot.
 
 ## Setup & Running
 

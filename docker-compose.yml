@@ -1,37 +1,26 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: addis_event_postgres
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: paza_event_api
     restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-addis_event_db}
+    env_file:
+      - .env
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${PORT:-8000}:8000"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-addis_event_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - static_data:/app/static
 
-  redis:
-    image: redis:7-alpine
-    container_name: addis_event_redis
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: paza_event_bot
     restart: always
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    command: ["python", "run_bot.py"]
+    env_file:
+      - .env
 
 volumes:
-  postgres_data:
-  redis_data:
-
+  static_data:

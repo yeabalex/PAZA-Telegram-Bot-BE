@@ -40,3 +40,12 @@ env/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!terraform.tfvars.example
+.terraform.lock.hcl
+

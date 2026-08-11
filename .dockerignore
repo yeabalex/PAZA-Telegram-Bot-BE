@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+
+# Terraform & IaC
+terraform/
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE & Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project Logs & Temp Files
+logs/
+scraped_events_output.json
+*.log
