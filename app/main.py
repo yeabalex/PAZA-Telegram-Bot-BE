@@ -38,9 +38,13 @@ async def lifespan(app: FastAPI):
     # Shutdown tasks
 
 
+is_prod = settings.ENVIRONMENT.lower() == "production" and not settings.DEBUG
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    docs_url=None if is_prod else "/docs",
+    redoc_url=None if is_prod else "/redoc",
+    openapi_url=None if is_prod else f"{settings.API_V1_STR}/openapi.json",
     lifespan=lifespan,
 )
 
@@ -75,8 +79,10 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/", tags=["Root"])
 async def root():
-    return {
+    res = {
         "message": f"Welcome to {settings.PROJECT_NAME}",
-        "docs": "/docs",
         "health": f"{settings.API_V1_STR}/health"
     }
+    if not is_prod:
+        res["docs"] = "/docs"
+    return res
