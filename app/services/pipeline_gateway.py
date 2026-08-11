@@ -198,7 +198,7 @@ async def run_pipeline_gateway(
         raise file_err
 
     duration = round(time.time() - start_time, 2)
-    return PipelineLogger.log_pipeline_success(
+    summary = PipelineLogger.log_pipeline_success(
         duration_seconds=duration,
         targets_processed=len(targets),
         total_posts_scraped=len(scraped_posts),
@@ -208,6 +208,71 @@ async def run_pipeline_gateway(
         failed_extractions=failed_extractions_count,
         output_file=output_file
     )
+
+    # Dispatch summary & JSON report to Telegram Admin Chat and delete temporary file
+    await send_pipeline_telegram_report(summary, output_file)
+
+    return summary
+
+
+async def send_pipeline_telegram_report(summary: Dict[str, Any], output_file: str):
+    """Sends pipeline log summary & JSON export document to Admin Telegram Chat ID, then deletes local file."""
+    import os
+    import httpx
+    from app.core.config import settings
+
+    bot_token = settings.TELEGRAM_BOT_TOKEN
+    chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
+
+    if not bot_token or not chat_id:
+        if os.path.exists(output_file):
+            try:
+                os.remove(output_file)
+            except Exception:
+                pass
+        return
+
+    caption = (
+        f"📊 <b>Paza Pipeline Run Summary</b>\n\n"
+        f"⏱️ <b>Duration:</b> <code>{summary.get('duration_seconds', 0)}s</code>\n"
+        f"🎯 <b>Targets Processed:</b> {summary.get('targets_processed', 0)}\n"
+        f"📥 <b>Total Posts Scraped:</b> {summary.get('total_posts_scraped', 0)}\n"
+        f"✨ <b>Events Extracted:</b> {summary.get('events_extracted', 0)}\n"
+        f"❌ <b>Non-Events Filtered:</b> {summary.get('non_events_count', 0)}\n"
+        f"⚠️ <b>Failed Extractions:</b> {summary.get('failed_extractions', 0)}\n"
+        f"🎙️ <b>Failed Transcriptions:</b> {summary.get('failed_transcriptions', 0)}\n\n"
+        f"🧹 <i>Temporary log file sent and purged from server.</i>"
+    )
+
+    api_url = f"https://api.telegram.org/bot{bot_token}"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+                with open(output_file, "rb") as f:
+                    doc_url = f"{api_url}/sendDocument"
+                    files = {"document": (os.path.basename(output_file), f, "application/json")}
+                    data = {
+                        "chat_id": chat_id,
+                        "caption": caption,
+                        "parse_mode": "HTML"
+                    }
+                    await client.post(doc_url, data=data, files=files)
+            else:
+                msg_url = f"{api_url}/sendMessage"
+                await client.post(msg_url, json={
+                    "chat_id": chat_id,
+                    "text": caption,
+                    "parse_mode": "HTML"
+                })
+    except Exception as err:
+        PipelineLogger.log_pipeline_failure("Telegram Log Dispatcher", err, 0)
+    finally:
+        if os.path.exists(output_file):
+            try:
+                os.remove(output_file)
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

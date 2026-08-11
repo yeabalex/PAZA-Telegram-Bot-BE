@@ -125,6 +125,7 @@ jobs:
 
             TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
             MINI_APP_URL="${{ secrets.MINI_APP_URL }}"
+            ADMIN_TELEGRAM_CHAT_ID="${{ secrets.ADMIN_TELEGRAM_CHAT_ID }}"
 
             INSTAGRAM_SESSION_ID="${{ secrets.INSTAGRAM_SESSION_ID }}"
             TIKTOK_SESSION_ID="${{ secrets.TIKTOK_SESSION_ID }}"

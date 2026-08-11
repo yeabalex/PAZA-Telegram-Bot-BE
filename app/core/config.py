@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     # Telegram Bot & Mini App Settings
     TELEGRAM_BOT_TOKEN: str = ""
     MINI_APP_URL: str = ""
+    ADMIN_TELEGRAM_CHAT_ID: str = ""
 
     # Scraper Session Cookies
     INSTAGRAM_SESSION_ID: str = ""
