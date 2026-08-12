@@ -128,6 +128,8 @@ jobs:
             MINI_APP_URL="${{ secrets.MINI_APP_URL }}"
             ADMIN_TELEGRAM_CHAT_ID="${{ secrets.ADMIN_TELEGRAM_CHAT_ID }}"
 
+            INSTAGRAM_USERNAME="${{ secrets.INSTAGRAM_USERNAME }}"
+            INSTAGRAM_PASSWORD="${{ secrets.INSTAGRAM_PASSWORD }}"
             INSTAGRAM_SESSION_ID="${{ secrets.INSTAGRAM_SESSION_ID }}"
             TIKTOK_SESSION_ID="${{ secrets.TIKTOK_SESSION_ID }}"
 
