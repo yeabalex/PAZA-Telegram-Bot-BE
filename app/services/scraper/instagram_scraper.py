@@ -238,6 +238,8 @@ class RealInstagramScraper(BaseInstagramScraper):
                                 is_vid = node.get("is_video", False)
                                 if sc:
                                     raw_posts.append((sc, cap, datetime.now(timezone.utc), is_vid))
+                if raw_posts:
+                    logger.info(f"[Fallback] Direct IG API fallback fetched {len(raw_posts)} posts for @{target}")
             except Exception as fallback_err:
                 logger.debug(f"Direct IG API fallback note for @{target}: {fallback_err}")
 
