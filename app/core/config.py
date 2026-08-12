@@ -48,8 +48,9 @@ class Settings(BaseSettings):
     ADMIN_TELEGRAM_CHAT_ID: str = ""
     ORGANIZER_PORTAL_URL: str = "https://paza-organizers.netlify.app"
 
-    # Scraper Session Cookies
+    # Scraper Session Credentials
     INSTAGRAM_USERNAME: str = ""
+    INSTAGRAM_PASSWORD: str = ""
     INSTAGRAM_SESSION_ID: str = ""
     TIKTOK_SESSION_ID: str = ""
 

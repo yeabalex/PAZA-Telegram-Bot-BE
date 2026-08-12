@@ -81,18 +81,28 @@ class RealInstagramScraper(BaseInstagramScraper):
             # ── Anti-block: patch Instaloader's internal request sleep ──
             patch_instaloader_sleep(L)
 
-            # ── Auth Stage 1: Try loading native Instaloader session file generated on server CLI ──
+            # ── Auth Stage 1: Load session file OR perform automated login with INSTAGRAM_USERNAME & INSTAGRAM_PASSWORD ──
             loaded_session = False
-            ig_user = getattr(settings, "INSTAGRAM_USERNAME", None)
+            ig_user = getattr(settings, "INSTAGRAM_USERNAME", None) or os.getenv("INSTAGRAM_USERNAME")
+            ig_pass = getattr(settings, "INSTAGRAM_PASSWORD", None) or os.getenv("INSTAGRAM_PASSWORD")
+
             if ig_user:
                 try:
                     L.load_session_from_file(ig_user)
                     loaded_session = True
                     logger.info(f"Successfully loaded native Instaloader session file for '{ig_user}'")
-                except Exception as sess_file_err:
-                    logger.debug(f"Instaloader session file for '{ig_user}' not found: {sess_file_err}")
+                except Exception:
+                    if ig_pass:
+                        try:
+                            logger.info(f"Session file missing — attempting automated login for '{ig_user}' from server IP...")
+                            L.login(ig_user, ig_pass)
+                            L.save_session_to_file()
+                            loaded_session = True
+                            logger.info(f"Successfully logged into Instagram as '{ig_user}' and saved native session file!")
+                        except Exception as login_err:
+                            logger.warning(f"Automated Instagram login failed for '{ig_user}': {login_err}")
 
-            # ── Auth Stage 2: Fallback to raw sessionid cookie string if session file not present ──
+            # ── Auth Stage 2: Fallback to raw sessionid cookie string if session file/login not active ──
             if not loaded_session and settings.INSTAGRAM_SESSION_ID:
                 try:
                     import urllib.parse
