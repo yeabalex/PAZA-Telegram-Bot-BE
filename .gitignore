@@ -51,5 +51,6 @@ htmlcov/
 *.pem
 *.key
 *.crt
-
-
+# Logs
+logs/
+*.log
