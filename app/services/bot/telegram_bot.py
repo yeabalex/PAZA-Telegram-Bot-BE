@@ -82,13 +82,19 @@ async def start_command_handler(update: Update, context: ContextTypes.DEFAULT_TY
         )
         await notify_admin(admin_msg)
 
+    organizer_portal_url = getattr(settings, "ORGANIZER_PORTAL_URL", "https://paza-organizers.netlify.app")
+
     welcome_text = (
         f"👋 **Welcome to PAZA Events Bot, {user_tg.first_name}!** 🎟️\n\n"
         f"Discover trending concerts, nightlife, art exhibitions, food festivals, and sports events in Addis Ababa.\n\n"
-        f"Tap **Launch Mini App** below to explore events and RSVP!"
+        f"Tap **Launch Mini App** below to explore events and RSVP!\n\n"
+        f"───────────────\n"
+        f"🎪 **Are you an Event Organizer?**\n"
+        f"Post and manage your events on our portal: [PAZA Organizer Portal]({organizer_portal_url})"
     )
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🚀 Launch Mini App", web_app=WebAppInfo(url=f"{mini_app_url}?tg_id={user_tg.id}"))]
+        [InlineKeyboardButton("🚀 Launch Mini App", web_app=WebAppInfo(url=f"{mini_app_url}?tg_id={user_tg.id}"))],
+        [InlineKeyboardButton("🎪 Organizer Portal", url=organizer_portal_url)]
     ])
     await update.message.reply_text(
         welcome_text,
