@@ -39,8 +39,8 @@ engine = create_async_engine(
     future=True,
     pool_size=10,
     max_overflow=20,
-    pool_recycle=300,
-    pool_timeout=30,
+    pool_recycle=60,
+    pool_timeout=15,
     pool_pre_ping=True,
     connect_args=_connect_args,
 )

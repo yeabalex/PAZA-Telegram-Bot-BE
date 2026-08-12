@@ -163,6 +163,7 @@ jobs:
                   - "8000:8000"
                 volumes:
                   - static_data:/app/static
+                  - /home/${{ secrets.SSH_USER }}/.config/instaloader:/root/.config/instaloader
 
               bot:
                 image: ${IMAGE_TAG}
