@@ -59,126 +59,15 @@ class RealInstagramScraper(BaseInstagramScraper):
 
         raw_posts: List[tuple] = []
         from app.core.config import settings
-        import instaloader
 
-        try:
-            L = instaloader.Instaloader(
-                download_pictures=False,
-                download_videos=False,
-                download_video_thumbnails=False,
-                download_geotags=False,
-                download_comments=False,
-                save_metadata=False,
-                max_connection_attempts=1,
-                quiet=True,
-            )
-
-            # ── Anti-block: randomise Instaloader's User-Agent ──
-            random_headers = get_random_headers()
-            random_headers["X-IG-App-ID"] = "936619743392459"
-            L.context._session.headers.update(random_headers)
-
-            # ── Anti-block: patch Instaloader's internal request sleep ──
-            patch_instaloader_sleep(L)
-
-            # ── Auth Stage 1: Check session file across possible paths ──
-            loaded_session = False
-            ig_user = getattr(settings, "INSTAGRAM_USERNAME", None) or os.getenv("INSTAGRAM_USERNAME")
-            ig_pass = getattr(settings, "INSTAGRAM_PASSWORD", None) or os.getenv("INSTAGRAM_PASSWORD")
-
-            if ig_user:
-                possible_paths = [
-                    None,
-                    f"/home/deployer/.config/instaloader/session-{ig_user}",
-                    f"/root/.config/instaloader/session-{ig_user}",
-                    f"/app/.config/instaloader/session-{ig_user}",
-                ]
-                for path in possible_paths:
-                    try:
-                        if path:
-                            if os.path.exists(path):
-                                L.load_session_from_file(ig_user, filename=path)
-                                loaded_session = True
-                                logger.info(f"Successfully loaded native Instaloader session from path '{path}'")
-                                break
-                        else:
-                            L.load_session_from_file(ig_user)
-                            loaded_session = True
-                            logger.info(f"Successfully loaded native Instaloader session for '{ig_user}'")
-                            break
-                    except Exception:
-                        continue
-
-            # ── Auth Stage 2: Fallback to sessionid cookie & bind context username ──
-            if not loaded_session and settings.INSTAGRAM_SESSION_ID:
-                try:
-                    import urllib.parse
-                    raw_sid = settings.INSTAGRAM_SESSION_ID
-                    unquoted_sid = urllib.parse.unquote(raw_sid)
-                    ds_user_id = unquoted_sid.split(":")[0] if ":" in unquoted_sid else (unquoted_sid.split("%3A")[0] if "%3A" in unquoted_sid else "")
-
-                    L.context._session.cookies.set(
-                        "sessionid",
-                        unquoted_sid,
-                        domain=".instagram.com",
-                    )
-                    if ds_user_id:
-                        L.context._session.cookies.set(
-                            "ds_user_id",
-                            ds_user_id,
-                            domain=".instagram.com",
-                        )
-                    if ig_user:
-                        L.context.username = ig_user
-                    elif ds_user_id:
-                        L.context.username = f"user_{ds_user_id}"
-
-                    loaded_session = True
-                    logger.info("Successfully injected sessionid cookie into Instaloader authenticated session context.")
-                except Exception as c_err:
-                    logger.warning(f"Failed to inject sessionid cookie: {c_err}")
-
-            if not is_hashtag:
-                profile = instaloader.Profile.from_username(L.context, target)
-                count = 0
-                for post in profile.get_posts():
-                    shortcode = post.shortcode
-                    caption = self._clean_caption(post.caption or "")
-                    post_date = post.date_utc.replace(tzinfo=timezone.utc)
-                    is_vid = getattr(post, "is_video", False)
-                    raw_posts.append((shortcode, caption, post_date, is_vid))
-                    count += 1
-                    if count >= limit:
-                        break
-            else:
-                hashtag = instaloader.Hashtag.from_name(L.context, target)
-                count = 0
-                for post in hashtag.get_posts():
-                    shortcode = post.shortcode
-                    caption = self._clean_caption(post.caption or "")
-                    post_date = post.date_utc.replace(tzinfo=timezone.utc)
-                    is_vid = getattr(post, "is_video", False)
-                    raw_posts.append((shortcode, caption, post_date, is_vid))
-                    count += 1
-                    if count >= limit:
-                        break
-
-        except instaloader.exceptions.ConnectionException as e:
-            logger.warning(
-                f"[AntiBlock] Instagram rate-limit for @{target}: {e}.\n"
-                f"💡 TIP: Instagram rate-limited this IP temporarily. Try again in a few minutes or verify sessionid."
-            )
-        except Exception as e:
-            logger.error(f"Instaloader error fetching @{target}: {e}")
-
-        # ── Direct HTTP API Fallback if Instaloader returned 0 posts ──
-        if not raw_posts and settings.INSTAGRAM_SESSION_ID:
+        # ── Primary: Direct HTTP User Feed API (using valid sessionid cookie) ──
+        if settings.INSTAGRAM_SESSION_ID and not is_hashtag:
             try:
                 import urllib.parse
                 import httpx
                 raw_sid = settings.INSTAGRAM_SESSION_ID
                 unquoted_sid = urllib.parse.unquote(raw_sid)
-                ds_user_id = unquoted_sid.split(":")[0] if ":" in unquoted_sid else ""
+                ds_user_id = unquoted_sid.split(":")[0] if ":" in unquoted_sid else (unquoted_sid.split("%3A")[0] if "%3A" in unquoted_sid else "")
 
                 api_headers = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
@@ -239,9 +128,92 @@ class RealInstagramScraper(BaseInstagramScraper):
                                 if sc:
                                     raw_posts.append((sc, cap, datetime.now(timezone.utc), is_vid))
                 if raw_posts:
-                    logger.info(f"[Fallback] Direct IG API fallback fetched {len(raw_posts)} posts for @{target}")
-            except Exception as fallback_err:
-                logger.debug(f"Direct IG API fallback note for @{target}: {fallback_err}")
+                    logger.info(f"Direct IG User Feed API successfully fetched {len(raw_posts)} posts for @{target}")
+            except Exception as api_err:
+                logger.debug(f"Direct IG User Feed API note for @{target}: {api_err}")
+
+        # ── Secondary Fallback: Instaloader ──
+        if not raw_posts:
+            try:
+                import instaloader
+                L = instaloader.Instaloader(
+                    download_pictures=False,
+                    download_videos=False,
+                    download_video_thumbnails=False,
+                    download_geotags=False,
+                    download_comments=False,
+                    save_metadata=False,
+                    max_connection_attempts=1,
+                    quiet=True,
+                )
+
+                random_headers = get_random_headers()
+                random_headers["X-IG-App-ID"] = "936619743392459"
+                L.context._session.headers.update(random_headers)
+                patch_instaloader_sleep(L)
+
+                loaded_session = False
+                ig_user = getattr(settings, "INSTAGRAM_USERNAME", None) or os.getenv("INSTAGRAM_USERNAME")
+                if ig_user:
+                    possible_paths = [
+                        None,
+                        f"/home/deployer/.config/instaloader/session-{ig_user}",
+                        f"/root/.config/instaloader/session-{ig_user}",
+                        f"/app/.config/instaloader/session-{ig_user}",
+                    ]
+                    for path in possible_paths:
+                        try:
+                            if path and os.path.exists(path):
+                                L.load_session_from_file(ig_user, filename=path)
+                                loaded_session = True
+                                break
+                            elif not path:
+                                L.load_session_from_file(ig_user)
+                                loaded_session = True
+                                break
+                        except Exception:
+                            continue
+
+                if not loaded_session and settings.INSTAGRAM_SESSION_ID:
+                    try:
+                        import urllib.parse
+                        raw_sid = settings.INSTAGRAM_SESSION_ID
+                        unquoted_sid = urllib.parse.unquote(raw_sid)
+                        ds_user_id = unquoted_sid.split(":")[0] if ":" in unquoted_sid else (unquoted_sid.split("%3A")[0] if "%3A" in unquoted_sid else "")
+                        L.context._session.cookies.set("sessionid", unquoted_sid, domain=".instagram.com")
+                        if ds_user_id:
+                            L.context._session.cookies.set("ds_user_id", ds_user_id, domain=".instagram.com")
+                    except Exception:
+                        pass
+
+                if not is_hashtag:
+                    profile = instaloader.Profile.from_username(L.context, target)
+                    count = 0
+                    for post in profile.get_posts():
+                        shortcode = post.shortcode
+                        caption = self._clean_caption(post.caption or "")
+                        post_date = post.date_utc.replace(tzinfo=timezone.utc)
+                        is_vid = getattr(post, "is_video", False)
+                        raw_posts.append((shortcode, caption, post_date, is_vid))
+                        count += 1
+                        if count >= limit:
+                            break
+                else:
+                    hashtag = instaloader.Hashtag.from_name(L.context, target)
+                    count = 0
+                    for post in hashtag.get_posts():
+                        shortcode = post.shortcode
+                        caption = self._clean_caption(post.caption or "")
+                        post_date = post.date_utc.replace(tzinfo=timezone.utc)
+                        is_vid = getattr(post, "is_video", False)
+                        raw_posts.append((shortcode, caption, post_date, is_vid))
+                        count += 1
+                        if count >= limit:
+                            break
+            except instaloader.exceptions.ConnectionException as e:
+                logger.warning(f"[AntiBlock] Instaloader rate-limit for @{target}: {e}")
+            except Exception as e:
+                logger.error(f"Instaloader error fetching @{target}: {e}")
 
         # ── Mark cooldown timestamp ──
         platform_cooldown.mark("instagram")
