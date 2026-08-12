@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     ORGANIZER_PORTAL_URL: str = "https://paza-organizers.netlify.app"
 
     # Scraper Session Cookies
+    INSTAGRAM_USERNAME: str = ""
     INSTAGRAM_SESSION_ID: str = ""
     TIKTOK_SESSION_ID: str = ""
 

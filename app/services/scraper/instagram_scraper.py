@@ -81,8 +81,19 @@ class RealInstagramScraper(BaseInstagramScraper):
             # ── Anti-block: patch Instaloader's internal request sleep ──
             patch_instaloader_sleep(L)
 
-            # ── Auth: inject unquoted session cookie if configured ──
-            if settings.INSTAGRAM_SESSION_ID:
+            # ── Auth Stage 1: Try loading native Instaloader session file generated on server CLI ──
+            loaded_session = False
+            ig_user = getattr(settings, "INSTAGRAM_USERNAME", None)
+            if ig_user:
+                try:
+                    L.load_session_from_file(ig_user)
+                    loaded_session = True
+                    logger.info(f"Successfully loaded native Instaloader session file for '{ig_user}'")
+                except Exception as sess_file_err:
+                    logger.debug(f"Instaloader session file for '{ig_user}' not found: {sess_file_err}")
+
+            # ── Auth Stage 2: Fallback to raw sessionid cookie string if session file not present ──
+            if not loaded_session and settings.INSTAGRAM_SESSION_ID:
                 try:
                     import urllib.parse
                     raw_sid = settings.INSTAGRAM_SESSION_ID
