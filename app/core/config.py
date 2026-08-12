@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = ""
     MINI_APP_URL: str = ""
     ADMIN_TELEGRAM_CHAT_ID: str = ""
+    ORGANIZER_PORTAL_URL: str = "https://paza-organizers.netlify.app"
 
     # Scraper Session Cookies
     INSTAGRAM_SESSION_ID: str = ""
