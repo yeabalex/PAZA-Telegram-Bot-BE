@@ -94,6 +94,13 @@ class EventRepository:
 
             post_id = item.get("post_id", "unknown")
             platform = item.get("platform", "ig")
+            post_url = item.get("metadata", {}).get("post_url") or item.get("post_url")
+            if not post_url and platform in ("ig", "instagram"):
+                post_url = f"https://www.instagram.com/p/{post_id}/"
+            elif not post_url and platform in ("tg", "telegram"):
+                ch = item.get("metadata", {}).get("handle_or_channel") or "addisevents"
+                post_url = f"https://t.me/s/{ch}/{post_id}"
+
             desc = (
                 evt_data.get("description")
                 or evt_data.get("short_summary")
@@ -112,6 +119,7 @@ class EventRepository:
                     entrance_fee_etb=evt_data.get("entrance_fee_etb") or 0.0,
                     category=cat_slug,
                     source_type="scraped",
+                    post_url=post_url,
                 )
             )
 
@@ -217,6 +225,13 @@ class EventRepository:
                     fee_raw = evt_data.get("entrance_fee_etb")
                     fee_val = float(fee_raw) if fee_raw is not None else 0.0
 
+                    post_url = item.get("metadata", {}).get("post_url") or item.get("post_url")
+                    if not post_url and platform in ("ig", "instagram"):
+                        post_url = f"https://www.instagram.com/p/{post_id}/"
+                    elif not post_url and platform in ("tg", "telegram"):
+                        ch = item.get("metadata", {}).get("handle_or_channel") or "addisevents"
+                        post_url = f"https://t.me/s/{ch}/{post_id}"
+
                     return EventDetailSchema(
                         id=full_id,
                         title=evt_data.get("title", "Untitled Event"),
@@ -231,6 +246,7 @@ class EventRepository:
                         location_gps=location_gps,
                         rsvp_count=real_rsvp_count,
                         source_type="scraped",
+                        post_url=post_url,
                     )
         except Exception as e:
             logger.error(f"Error reading Redis event detail: {e}")
@@ -259,6 +275,8 @@ class EventRepository:
                 s_fee_raw = data.get("entrance_fee_etb")
                 s_fee_val = float(s_fee_raw) if s_fee_raw is not None else 0.0
 
+                s_post_url = data.get("post_url") or data.get("source_url")
+
                 return EventDetailSchema(
                     id=clean_id,
                     title=data.get("title", "Untitled Event"),
@@ -272,6 +290,7 @@ class EventRepository:
                     image_url=data.get("image_url", ""),
                     rsvp_count=real_rsvp_count,
                     source_type="scraped",
+                    post_url=s_post_url,
                 )
         except Exception as e:
             logger.error(f"Error reading DB saved event detail: {e}")
