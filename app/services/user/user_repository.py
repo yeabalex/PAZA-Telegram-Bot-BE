@@ -15,6 +15,14 @@ class UserRepository:
     """Repository handling all database queries for User management and Interest linking."""
 
     @staticmethod
+    async def get_total_users_count(db: AsyncSession) -> int:
+        """Count total registered users in PostgreSQL DB."""
+        from sqlalchemy import func
+        stmt = select(func.count()).select_from(User)
+        res = await db.execute(stmt)
+        return res.scalar() or 0
+
+    @staticmethod
     async def get_by_telegram_id(db: AsyncSession, telegram_id: int) -> Optional[User]:
         """Fetch user by Telegram ID."""
         stmt = select(User).where(User.telegram_id == telegram_id)

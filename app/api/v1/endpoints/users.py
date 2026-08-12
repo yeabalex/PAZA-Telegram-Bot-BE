@@ -18,6 +18,8 @@ from app.schemas.user import (
 )
 from app.services.user.user_repository import UserRepository
 
+from app.services.bot.admin_notifier import notify_admin
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -64,6 +66,9 @@ async def get_current_user_profile(
         )
 
     try:
+        existing_user = await UserRepository.get_by_telegram_id(db, target_tg_id)
+        is_new_user = existing_user is None
+
         # Auto-create or sync existing user profile with latest data from Telegram
         user = await UserRepository.get_or_create_user(
             db=db,
@@ -73,6 +78,20 @@ async def get_current_user_profile(
             preferred_language=pref_lang,
             force_sync=has_tg_payload
         )
+
+        if is_new_user:
+            total_users = await UserRepository.get_total_users_count(db)
+            uname_str = f"@{sync_username}" if sync_username else "None"
+            user_link = f"tg://user?id={target_tg_id}"
+            admin_msg = (
+                f"🚀 **User Opened Mini App (New Registration)**\n\n"
+                f"👤 **Name**: {sync_full_name or 'Anonymous'}\n"
+                f"🏷️ **Username**: {uname_str}\n"
+                f"🆔 **Telegram ID**: `{target_tg_id}`\n"
+                f"🔗 **Profile Link**: [{sync_full_name or 'User Profile'}]({user_link})\n\n"
+                f"📊 **Total Registered Users**: `{total_users}`"
+            )
+            await notify_admin(admin_msg)
 
         profile = await UserRepository.get_user_profile(db, user.telegram_id)
     except Exception as e:
