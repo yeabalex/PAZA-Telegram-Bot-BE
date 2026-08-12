@@ -81,34 +81,41 @@ class RealInstagramScraper(BaseInstagramScraper):
             # ── Anti-block: patch Instaloader's internal request sleep ──
             patch_instaloader_sleep(L)
 
-            # ── Auth Stage 1: Load session file OR perform automated login with INSTAGRAM_USERNAME & INSTAGRAM_PASSWORD ──
+            # ── Auth Stage 1: Check session file across possible paths ──
             loaded_session = False
             ig_user = getattr(settings, "INSTAGRAM_USERNAME", None) or os.getenv("INSTAGRAM_USERNAME")
             ig_pass = getattr(settings, "INSTAGRAM_PASSWORD", None) or os.getenv("INSTAGRAM_PASSWORD")
 
             if ig_user:
-                try:
-                    L.load_session_from_file(ig_user)
-                    loaded_session = True
-                    logger.info(f"Successfully loaded native Instaloader session file for '{ig_user}'")
-                except Exception:
-                    if ig_pass:
-                        try:
-                            logger.info(f"Session file missing — attempting automated login for '{ig_user}' from server IP...")
-                            L.login(ig_user, ig_pass)
-                            L.save_session_to_file()
+                possible_paths = [
+                    None,
+                    f"/home/deployer/.config/instaloader/session-{ig_user}",
+                    f"/root/.config/instaloader/session-{ig_user}",
+                    f"/app/.config/instaloader/session-{ig_user}",
+                ]
+                for path in possible_paths:
+                    try:
+                        if path:
+                            if os.path.exists(path):
+                                L.load_session_from_file(ig_user, filename=path)
+                                loaded_session = True
+                                logger.info(f"Successfully loaded native Instaloader session from path '{path}'")
+                                break
+                        else:
+                            L.load_session_from_file(ig_user)
                             loaded_session = True
-                            logger.info(f"Successfully logged into Instagram as '{ig_user}' and saved native session file!")
-                        except Exception as login_err:
-                            logger.warning(f"Automated Instagram login failed for '{ig_user}': {login_err}")
+                            logger.info(f"Successfully loaded native Instaloader session for '{ig_user}'")
+                            break
+                    except Exception:
+                        continue
 
-            # ── Auth Stage 2: Fallback to raw sessionid cookie string if session file/login not active ──
+            # ── Auth Stage 2: Fallback to sessionid cookie & bind context username ──
             if not loaded_session and settings.INSTAGRAM_SESSION_ID:
                 try:
                     import urllib.parse
                     raw_sid = settings.INSTAGRAM_SESSION_ID
                     unquoted_sid = urllib.parse.unquote(raw_sid)
-                    ds_user_id = unquoted_sid.split(":")[0] if ":" in unquoted_sid else ""
+                    ds_user_id = unquoted_sid.split(":")[0] if ":" in unquoted_sid else (unquoted_sid.split("%3A")[0] if "%3A" in unquoted_sid else "")
 
                     L.context._session.cookies.set(
                         "sessionid",
@@ -121,8 +128,15 @@ class RealInstagramScraper(BaseInstagramScraper):
                             ds_user_id,
                             domain=".instagram.com",
                         )
-                except Exception:
-                    pass
+                    if ig_user:
+                        L.context.username = ig_user
+                    elif ds_user_id:
+                        L.context.username = f"user_{ds_user_id}"
+
+                    loaded_session = True
+                    logger.info("Successfully injected sessionid cookie into Instaloader authenticated session context.")
+                except Exception as c_err:
+                    logger.warning(f"Failed to inject sessionid cookie: {c_err}")
 
             if not is_hashtag:
                 profile = instaloader.Profile.from_username(L.context, target)
