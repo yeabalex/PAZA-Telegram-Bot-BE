@@ -100,7 +100,7 @@ class WhisperTranscriber:
             except Exception as fb_err:
                 logger.debug(f"TikTok audio fallback error for {post_url}: {fb_err}")
 
-        # ── Fallback for Instagram Reel video via session-authenticated feed ──
+        # ── Fallback for Instagram Reel video via session-authenticated web API ──
         if "instagram.com" in post_url.lower() and settings.INSTAGRAM_SESSION_ID:
             try:
                 temp_dir = tempfile.gettempdir()
@@ -108,35 +108,47 @@ class WhisperTranscriber:
                 url_hash = hashlib.md5(post_url.encode()).hexdigest()[:8]
                 ig_fallback_path = os.path.join(temp_dir, f"audio_ig_{url_hash}.mp4")
 
-                # Extract reel shortcode (e.g. DbnaHKwofp0)
                 reel_match = re.search(r'/(?:reel|p)/([A-Za-z0-9_-]+)', post_url)
                 if reel_match:
                     shortcode = reel_match.group(1)
-                    # Search recent user feed via authenticated endpoint
-                    # Uses current sessionid header
+                    raw_sid = settings.INSTAGRAM_SESSION_ID
+                    import urllib.parse
+                    unquoted_sid = urllib.parse.unquote(raw_sid)
+
                     headers = {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-                        "Cookie": f"sessionid={settings.INSTAGRAM_SESSION_ID}",
-                        "X-IG-App-ID": "936619743392459"
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+                        "Cookie": f"sessionid={unquoted_sid}",
+                        "X-IG-App-ID": "936619743392459",
+                        "Accept": "*/*"
                     }
+
+                    endpoints_to_try = [
+                        f"https://www.instagram.com/api/v1/media/by/shortcode/{shortcode}/",
+                        f"https://www.instagram.com/p/{shortcode}/?__a=1&__d=dis"
+                    ]
+
+                    video_url = None
                     with httpx.Client(timeout=15.0, headers=headers, follow_redirects=True) as client:
-                        # Try web info endpoint for shortcode
-                        info_res = client.get(f"https://www.instagram.com/p/{shortcode}/?__a=1&__d=dis")
-                        video_url = None
-                        if info_res.status_code == 200:
-                            items = info_res.json().get("items", [])
-                            if items and items[0].get("video_versions"):
-                                video_url = items[0]["video_versions"][0]["url"]
+                        for ep in endpoints_to_try:
+                            try:
+                                info_res = client.get(ep)
+                                if info_res.status_code == 200:
+                                    items = info_res.json().get("items", [])
+                                    if items and items[0].get("video_versions"):
+                                        video_url = items[0]["video_versions"][0]["url"]
+                                        break
+                            except Exception:
+                                pass
 
                         if video_url:
                             v_res = client.get(video_url)
                             if v_res.status_code == 200 and len(v_res.content) > 1000:
                                 with open(ig_fallback_path, "wb") as f:
                                     f.write(v_res.content)
-                                logger.info(f"Instagram Reel fallback download success ({len(v_res.content)} bytes)")
+                                logger.info(f"Instagram Reel direct media download success ({len(v_res.content)} bytes)")
                                 return ig_fallback_path
             except Exception as ig_err:
-                logger.debug(f"Instagram Reel fallback note for {post_url}: {ig_err}")
+                logger.warning(f"Instagram Reel direct media download error for {post_url}: {ig_err}")
 
         return None
 
