@@ -1,31 +1,39 @@
-# Paza Event Bot - Telegram Bot Backend
+# Paza Event Bot Backend
 
-FastAPI backend application for Paza Event Bot.
+FastAPI asynchronous backend server and automated ingestion engine for Paza Event Bot.
 
-## Setup & Running
+> **Note**: For complete documentation, architecture diagrams, and full-stack setup instructions, please refer to the [Root README](../README.md).
 
-### 1. Create and activate a Virtual Environment
+## Quick Start
+
+### 1. Environment Setup
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-```
-
-### 2. Install Dependencies
-```bash
 pip install -r requirements.txt
-```
-
-### 3. Environment Variables
-Copy `.env.example` to `.env`:
-```bash
 cp .env.example .env
 ```
 
-### 4. Run Development Server
+### 2. Database Initialization
+
 ```bash
-uvicorn app.main:app --reload
+createdb addis_event_db
+psql -d addis_event_db -f schema.sql
+python seed_interests.py
 ```
 
-The API docs will be available at:
+### 3. Running Development Server
+
+```bash
+uvicorn app.main:app --reload --port 8000
+```
+
 - Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
 - ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+### 4. Running Ingestion Pipeline Manually
+
+```bash
+python run_pipeline_gateway.py
+```
