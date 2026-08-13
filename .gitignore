@@ -54,3 +54,7 @@ htmlcov/
 # Logs
 logs/
 *.log
+
+# CLI Scratch Scripts
+add_target.py
+
