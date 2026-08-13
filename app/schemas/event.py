@@ -84,6 +84,19 @@ class EventExtractionResult(BaseModel):
     )
 
 
+class MultiEventExtractionResult(BaseModel):
+    """Container for multiple events extracted from a single post."""
+
+    is_event: bool = Field(
+        default=False,
+        description="True if the post contains at least one genuine upcoming event."
+    )
+    events: list[EventExtractionResult] = Field(
+        default_factory=list,
+        description="List of individual events extracted from the post text."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Scraped Message (raw data from any platform)
 # ---------------------------------------------------------------------------

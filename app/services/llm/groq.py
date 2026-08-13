@@ -5,7 +5,7 @@ import logging
 import httpx
 from app.core.config import settings
 from app.schemas.event import EventExtractionResult
-from app.services.llm.base import BaseLLMProvider, get_extraction_prompt
+from app.services.llm.base import BaseLLMProvider, get_extraction_prompt, parse_llm_json_events
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class GroqLLMProvider(BaseLLMProvider):
     def name(self) -> str:
         return "Groq"
 
-    async def extract_event(self, text: str) -> EventExtractionResult:
+    async def extract_events(self, text: str) -> list[EventExtractionResult]:
         if not self.api_key:
             raise ValueError("No GROQ_API_KEY provided.")
 
@@ -40,7 +40,6 @@ class GroqLLMProvider(BaseLLMProvider):
             "temperature": 0.1
         }
 
-
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(url, headers=headers, json=payload)
             if response.status_code != 200:
@@ -49,7 +48,11 @@ class GroqLLMProvider(BaseLLMProvider):
             res_json = response.json()
             content = res_json["choices"][0]["message"]["content"]
             parsed = json.loads(content)
-            return EventExtractionResult(**parsed)
+            return parse_llm_json_events(parsed)
+
+    async def extract_event(self, text: str) -> EventExtractionResult:
+        evts = await self.extract_events(text)
+        return evts[0] if evts else EventExtractionResult(is_event=False)
 
 
     def _heuristic_fallback(self, text: str) -> EventExtractionResult:
