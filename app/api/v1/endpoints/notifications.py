@@ -62,7 +62,7 @@ async def broadcast_scraped_events(
     selected_items = raw_events[:limit]
 
     # Build multi-event digest message with HTML formatting
-    lines = ["<b>⚡ LATEST EXTRACTED EVENTS DISCOVERY 🎟️</b>\n"]
+    lines = ["<b>✨ NEW EVENTS IN ADDIS ABABA 🎟️</b>\n"]
 
     for idx, item in enumerate(selected_items, start=1):
         evt_data = item.get("event", {})
