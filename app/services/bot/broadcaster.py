@@ -19,7 +19,8 @@ async def send_single_notification(
     text: str,
     image_url: Optional[str] = None,
     button_text: str = "🚀 View in Mini App",
-    web_app_url: str = ""
+    web_app_url: str = "",
+    parse_mode: str = "HTML"
 ) -> bool:
     """Send photo or text Telegram notification message to a single user with inline WebApp button."""
     try:
@@ -41,7 +42,7 @@ async def send_single_notification(
                     "chat_id": chat_id,
                     "photo": image_url,
                     "caption": text,
-                    "parse_mode": "Markdown",
+                    "parse_mode": parse_mode,
                     "reply_markup": reply_markup
                 }
             else:
@@ -49,7 +50,7 @@ async def send_single_notification(
                 payload = {
                     "chat_id": chat_id,
                     "text": text,
-                    "parse_mode": "Markdown",
+                    "parse_mode": parse_mode,
                     "disable_web_page_preview": True,
                     "reply_markup": reply_markup
                 }
@@ -69,7 +70,8 @@ async def broadcast_to_all_users(
     text: str,
     image_url: Optional[str] = None,
     button_text: str = "🚀 View in Mini App",
-    mini_app_params: str = ""
+    mini_app_params: str = "",
+    parse_mode: str = "HTML"
 ) -> Dict[str, Any]:
     """Fetch all registered user Telegram IDs from database and broadcast notification message."""
     token = settings.TELEGRAM_BOT_TOKEN
@@ -102,7 +104,8 @@ async def broadcast_to_all_users(
                 text=text,
                 image_url=image_url,
                 button_text=button_text,
-                web_app_url=app_url
+                web_app_url=app_url,
+                parse_mode=parse_mode
             )
             if sent:
                 success_count += 1
