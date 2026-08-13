@@ -5,7 +5,7 @@ import logging
 import httpx
 from app.core.config import settings
 from app.schemas.event import EventExtractionResult
-from app.services.llm.base import BaseLLMProvider, EXTRACTION_SYSTEM_PROMPT
+from app.services.llm.base import BaseLLMProvider, EXTRACTION_SYSTEM_PROMPT, parse_llm_json_events
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ class GeminiLLMProvider(BaseLLMProvider):
     def name(self) -> str:
         return "Gemini"
 
-    async def extract_event(self, text: str) -> EventExtractionResult:
+    async def extract_events(self, text: str) -> list[EventExtractionResult]:
         if not self.api_key:
             raise ValueError("No GEMINI_API_KEY provided.")
 
@@ -47,7 +47,7 @@ class GeminiLLMProvider(BaseLLMProvider):
                     res_json = response.json()
                     candidate_text = res_json["candidates"][0]["content"]["parts"][0]["text"]
                     parsed = json.loads(candidate_text)
-                    return EventExtractionResult(**parsed)
+                    return parse_llm_json_events(parsed)
                 elif response.status_code == 429:
                     logger.info(f"Gemini LLM model [{model_id}] hit 429 rate limit. Trying next model endpoint...")
                     last_error = f"Gemini API HTTP Error 429: {response.text}"
@@ -55,6 +55,10 @@ class GeminiLLMProvider(BaseLLMProvider):
                     last_error = f"Gemini API HTTP Error {response.status_code}: {response.text}"
 
         raise RuntimeError(last_error or "Gemini API request failed across all model endpoints.")
+
+    async def extract_event(self, text: str) -> EventExtractionResult:
+        evts = await self.extract_events(text)
+        return evts[0] if evts else EventExtractionResult(is_event=False)
 
 
     def _heuristic_fallback(self, text: str) -> EventExtractionResult:

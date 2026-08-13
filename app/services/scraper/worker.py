@@ -125,41 +125,44 @@ class ExtractionWorker:
             llm_context = f"[{' | '.join(context_hints)}]\n\n{raw_text}"
 
         # Extract event structure using alternating LLM providers
-        event_result, provider_name = await self.llm_router.extract_event_alternating(llm_context)
+        events_list, provider_name = await self.llm_router.extract_events_alternating(llm_context)
 
         # Step 5: Storage & Cache Hygiene
-        if event_result.is_event:
-            sources = {}
-            if post_url:
-                sources[platform] = post_url
+        valid_events = [e for e in events_list if e and e.is_event]
+        if valid_events:
+            for sub_idx, event_result in enumerate(valid_events, start=1):
+                sub_task_id = task_id if len(valid_events) == 1 else f"{task_id}_{sub_idx}"
+                sources = {}
+                if post_url:
+                    sources[platform] = post_url
 
-            event_payload = {
-                "event_id": task_id,
-                "title": event_result.title,
-                "description": event_result.description,
-                "short_summary": event_result.short_summary,
-                "start_datetime": event_result.start_datetime,
-                "end_datetime": event_result.end_datetime,
-                "venue_name": event_result.venue_name,
-                "location_gps": event_result.location_gps,
-                "sub_city": event_result.sub_city,
-                "entrance_fee_etb": event_result.entrance_fee_etb,
-                "image_url": event_result.image_url or image_url,
-                "category": event_result.category,
-                "confidence_score": event_result.confidence_score,
-                "extracted_by": provider_name,
-                "sources": sources,
-                "source_channel": channel_username,
-                "source_platform": platform,
-                "source_message_id": message_id,
-                "scraped_date": scraped_date,
-                "raw_text": raw_text,
-            }
+                event_payload = {
+                    "event_id": sub_task_id,
+                    "title": event_result.title,
+                    "description": event_result.description,
+                    "short_summary": event_result.short_summary,
+                    "start_datetime": event_result.start_datetime,
+                    "end_datetime": event_result.end_datetime,
+                    "venue_name": event_result.venue_name,
+                    "location_gps": event_result.location_gps,
+                    "sub_city": event_result.sub_city,
+                    "entrance_fee_etb": event_result.entrance_fee_etb,
+                    "image_url": event_result.image_url or image_url,
+                    "category": event_result.category,
+                    "confidence_score": event_result.confidence_score,
+                    "extracted_by": provider_name,
+                    "sources": sources,
+                    "source_channel": channel_username,
+                    "source_platform": platform,
+                    "source_message_id": message_id,
+                    "scraped_date": scraped_date,
+                    "raw_text": raw_text,
+                }
 
-            # Save to main Redis feed cache with dynamic TTL and deduplication merging
-            ttl = self._calculate_redis_ttl(event_result.start_datetime, event_result.end_datetime)
-            await self.queue_manager.save_feed_event(task_id, event_payload, ttl_seconds=ttl)
-            logger.info(f"Worker [{self.worker_id}] SUCCESS: Valid Event extracted via {provider_name} -> Saved to Feed (TTL: {round(ttl/3600, 1)}h).")
+                # Save to main Redis feed cache with dynamic TTL and deduplication merging
+                ttl = self._calculate_redis_ttl(event_result.start_datetime, event_result.end_datetime)
+                await self.queue_manager.save_feed_event(sub_task_id, event_payload, ttl_seconds=ttl)
+                logger.info(f"Worker [{self.worker_id}] SUCCESS: Valid Event extracted via {provider_name} -> Saved to Feed ({sub_task_id}, TTL: {round(ttl/3600, 1)}h).")
         else:
             logger.info(f"Worker [{self.worker_id}] DROPPED: Post {task_id} classified as Non-Event by {provider_name}.")
 

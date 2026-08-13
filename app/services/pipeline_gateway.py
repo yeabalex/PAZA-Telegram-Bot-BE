@@ -129,42 +129,46 @@ async def run_pipeline_gateway(
         if is_event:
             llm_context = f"[Platform: {platform} | Source: @{staged.get('channel_username')}]\n\n{raw_caption}"
             try:
-                event_res, provider_name = await llm_router.extract_event_alternating(llm_context)
+                events_res_list, provider_name = await llm_router.extract_events_alternating(llm_context)
                 await asyncio.sleep(2.0)  # Rate-limit pacing
                 extracted_by_provider = provider_name
 
-                if event_res and event_res.is_event:
-                    events_extracted_count += 1
-                    extracted_event_data = {
-                        "title": event_res.title,
-                        "description": event_res.description,
-                        "short_summary": event_res.short_summary,
-                        "start_datetime": event_res.start_datetime,
-                        "end_datetime": event_res.end_datetime,
-                        "venue_name": event_res.venue_name,
-                        "location_gps": event_res.location_gps,
-                        "sub_city": event_res.sub_city,
-                        "entrance_fee_etb": event_res.entrance_fee_etb,
-                        "category": event_res.category,
-                        "confidence_score": event_res.confidence_score,
-                    }
-                    post_id = staged.get("message_id") or task_id
-                    try:
-                        await redis_storage.save_event(
-                            platform=platform,
-                            post_id=str(post_id),
-                            event_dict=extracted_event_data,
-                            raw_metadata={
-                                "task_id": task_id,
-                                "handle_or_channel": staged.get("channel_username"),
-                                "post_url": post_url,
-                                "extracted_by": provider_name,
-                                "classifier_score": confidence
-                            }
-                        )
-                    except Exception as redis_save_err:
-                        PipelineLogger.log_pipeline_failure("Stage 6: Redis Cache Storage", redis_save_err, time.time() - start_time)
-                        raise redis_save_err
+                if events_res_list:
+                    base_post_id = str(staged.get("message_id") or task_id)
+                    for sub_idx, event_res in enumerate(events_res_list, start=1):
+                        if not event_res or not event_res.is_event:
+                            continue
+                        events_extracted_count += 1
+                        extracted_event_data = {
+                            "title": event_res.title,
+                            "description": event_res.description,
+                            "short_summary": event_res.short_summary,
+                            "start_datetime": event_res.start_datetime,
+                            "end_datetime": event_res.end_datetime,
+                            "venue_name": event_res.venue_name,
+                            "location_gps": event_res.location_gps,
+                            "sub_city": event_res.sub_city,
+                            "entrance_fee_etb": event_res.entrance_fee_etb,
+                            "category": event_res.category,
+                            "confidence_score": event_res.confidence_score,
+                        }
+                        post_key = base_post_id if len(events_res_list) == 1 else f"{base_post_id}_{sub_idx}"
+                        try:
+                            await redis_storage.save_event(
+                                platform=platform,
+                                post_id=post_key,
+                                event_dict=extracted_event_data,
+                                raw_metadata={
+                                    "task_id": task_id,
+                                    "handle_or_channel": staged.get("channel_username"),
+                                    "post_url": post_url,
+                                    "extracted_by": provider_name,
+                                    "classifier_score": confidence
+                                }
+                            )
+                        except Exception as redis_save_err:
+                            PipelineLogger.log_pipeline_failure("Stage 6: Redis Cache Storage", redis_save_err, time.time() - start_time)
+                            raise redis_save_err
                 else:
                     non_events_count += 1
             except Exception as llm_err:
