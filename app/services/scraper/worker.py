@@ -87,15 +87,15 @@ class ExtractionWorker:
         if not raw_text:
             return False
 
-        # Transcribe video audio if post is a video (or IG/TikTok) and caption is short (< 150 chars)
-        if (is_video or platform in ("instagram", "tiktok")) and post_url and len(raw_text.strip()) < 150:
+        # Transcribe video audio if post is a video (or IG/TikTok) and caption is under 800 chars
+        if (is_video or platform in ("instagram", "tiktok")) and post_url and len(raw_text.strip()) < 800:
             try:
                 from app.services.transcriber.whisper import WhisperTranscriber
                 transcriber = WhisperTranscriber()
                 raw_text = await transcriber.transcribe_post_video_if_needed(
                     post_url=post_url,
                     current_caption=raw_text,
-                    min_caption_len=150
+                    min_caption_len=800
                 )
             except Exception as e:
                 logger.warning(f"Audio transcription step skipped for task [{task_id}]: {e}")

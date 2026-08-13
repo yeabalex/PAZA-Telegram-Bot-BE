@@ -116,7 +116,7 @@ async def run_pipeline_gateway(
                 raw_caption = await transcriber.transcribe_post_video_if_needed(
                     post_url=post_url,
                     current_caption=raw_caption,
-                    min_caption_len=150
+                    min_caption_len=800
                 )
             except Exception as t_err:
                 failed_transcriptions_count += 1
