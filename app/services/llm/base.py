@@ -21,6 +21,9 @@ STRICT RULES:
 2. Detection: Set is_event=True ONLY if it represents a genuine upcoming/ongoing event (concert, festival, workshop, conference, party, exhibition, bazaar, sports, open mic, etc.). Set is_event=False for past events, general news, hiring posts, or chat.
 3. Standardized ISO 8601 Datetimes: Format start_datetime and end_datetime strictly as ISO 8601 strings (YYYY-MM-DDTHH:MM:SS). Assume year {now.year} if year is omitted. If end_datetime is not mentioned in text, set end_datetime to 23:59:59 on the event date.
 4. MULTIPLE EVENTS PER POST: If a single post announces MULTIPLE distinct events (e.g. separate concerts on different dates/venues, or a multi-event lineup), extract EACH event separately into the "events" array. Do NOT combine separate events into a single entry.
+5. CLEAN & HIGH-QUALITY TITLES: Extract a clear, specific, professional event title. NEVER output generic, meaningless, or senseless titles such as "Events in Addis Ababa", "Check this out", "Promo", "Announcement", "Test", or raw social handles. If a specific title is missing, construct a clear descriptive title based on the event activity (e.g. "Live Jazz & Wine Night").
+6. RICH & ENGAGING DESCRIPTION: Provide a rich, polished, and comprehensive `description` detailing what attendees can expect, key activities, special performers/guests, schedule, and entry instructions. Filter out spam, raw links, phone numbers, and repetitive hashtags into clean, engaging sentences.
+7. CRISP SHORT SUMMARY: `short_summary` must be a captivating 1-2 sentence executive snapshot summarizing the event experience.
 
 Return ONLY valid JSON matching this schema:
 {{
