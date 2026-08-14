@@ -18,22 +18,10 @@ def get_redis_storage() -> RedisEventStorage:
     return RedisEventStorage()
 
 
-def build_post_url(item: dict) -> str:
-    post_id = item.get("post_id", "unknown")
-    platform = item.get("platform", "ig")
-    post_url = item.get("metadata", {}).get("post_url") or item.get("post_url")
-    if not post_url and platform in ("ig", "instagram"):
-        post_url = f"https://www.instagram.com/p/{post_id}/"
-    elif not post_url and platform in ("tg", "telegram"):
-        ch = item.get("metadata", {}).get("handle_or_channel") or "addisevents"
-        post_url = f"https://t.me/s/{ch}/{post_id}"
-    return post_url or settings.MINI_APP_URL or "https://t.me"
-
-
 @router.post(
     "/broadcast-scraped",
     summary="Broadcast Digest of Latest Extracted Events from Redis",
-    description="Picks up to `limit` (default 3) latest extracted active events from Redis, formats them into a single digest with links, and sends to target_chat_id or broadcasts to all users.",
+    description="Picks up to `limit` (default 3) latest extracted active events from Redis, formats them into a single digest, and sends to target_chat_id or broadcasts to all users.",
     dependencies=[Depends(require_api_key)]
 )
 async def broadcast_scraped_events(
@@ -78,13 +66,10 @@ async def broadcast_scraped_events(
         raw_desc = evt_data.get("description") or evt_data.get("short_summary") or "Check out this upcoming event in Addis Ababa!"
         desc_clean = html.escape(raw_desc[:140] + ("..." if len(raw_desc) > 140 else ""))
 
-        post_url = build_post_url(item)
-
         lines.append(
             f"<b>{idx}️⃣ {title}</b>\n"
             f"📍 <b>Venue</b>: {venue} | 💰 <b>Fee</b>: {fee_str}\n"
             f"📝 {desc_clean}\n"
-            f"🔗 <a href=\"{post_url}\">View Source Post</a>\n"
         )
 
     lines.append("<i>Tap below to explore live events in PAZA Mini App!</i>")
