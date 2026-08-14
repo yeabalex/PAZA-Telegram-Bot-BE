@@ -80,6 +80,11 @@ class EventRepository:
     ) -> List[EventSummarySchema]:
         """Fetch scraped events from Redis cache for Explore tab with pagination and filtering."""
         raw_events = await redis_storage.get_all_active_events()
+        # Sort raw_events by stored_at ISO timestamp descending (newest first)
+        raw_events.sort(
+            key=lambda x: x.get("stored_at") or x.get("event", {}).get("start_datetime") or "",
+            reverse=True
+        )
         results: List[EventSummarySchema] = []
 
         for item in raw_events:
@@ -118,6 +123,7 @@ class EventRepository:
                     start_datetime=evt_data.get("start_datetime"),
                     entrance_fee_etb=evt_data.get("entrance_fee_etb") or 0.0,
                     category=cat_slug,
+                    image_url=evt_data.get("image_url") or item.get("image_url") or "",
                     source_type="scraped",
                     post_url=post_url,
                 )
