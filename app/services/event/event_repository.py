@@ -98,13 +98,33 @@ class EventRepository:
                     continue
 
             post_id = item.get("post_id", "unknown")
-            platform = item.get("platform", "ig")
-            post_url = item.get("metadata", {}).get("post_url") or item.get("post_url")
+            platform = item.get("platform") or item.get("source_platform") or evt_data.get("source_platform") or "ig"
+            post_url = (
+                item.get("metadata", {}).get("post_url")
+                or item.get("post_url")
+                or evt_data.get("post_url")
+                or evt_data.get("source_url")
+            )
+            if not post_url:
+                sources = item.get("sources") or evt_data.get("sources")
+                if isinstance(sources, dict) and sources:
+                    for _, s_url in sources.items():
+                        if s_url:
+                            post_url = str(s_url)
+                            break
             if not post_url and platform in ("ig", "instagram"):
                 post_url = f"https://www.instagram.com/p/{post_id}/"
             elif not post_url and platform in ("tg", "telegram"):
-                ch = item.get("metadata", {}).get("handle_or_channel") or "addisevents"
+                ch = (
+                    item.get("metadata", {}).get("handle_or_channel")
+                    or item.get("source_channel")
+                    or evt_data.get("source_channel")
+                    or "addisevents"
+                )
                 post_url = f"https://t.me/s/{ch}/{post_id}"
+            elif not post_url and platform in ("tiktok",):
+                ch = item.get("source_channel") or evt_data.get("source_channel")
+                post_url = f"https://www.tiktok.com/@{ch}" if ch else None
 
             desc = (
                 evt_data.get("description")
@@ -231,12 +251,32 @@ class EventRepository:
                     fee_raw = evt_data.get("entrance_fee_etb")
                     fee_val = float(fee_raw) if fee_raw is not None else 0.0
 
-                    post_url = item.get("metadata", {}).get("post_url") or item.get("post_url")
+                    post_url = (
+                        item.get("metadata", {}).get("post_url")
+                        or item.get("post_url")
+                        or evt_data.get("post_url")
+                        or evt_data.get("source_url")
+                    )
+                    if not post_url:
+                        sources = item.get("sources") or evt_data.get("sources")
+                        if isinstance(sources, dict) and sources:
+                            for _, s_url in sources.items():
+                                if s_url:
+                                    post_url = str(s_url)
+                                    break
                     if not post_url and platform in ("ig", "instagram"):
                         post_url = f"https://www.instagram.com/p/{post_id}/"
                     elif not post_url and platform in ("tg", "telegram"):
-                        ch = item.get("metadata", {}).get("handle_or_channel") or "addisevents"
+                        ch = (
+                            item.get("metadata", {}).get("handle_or_channel")
+                            or item.get("source_channel")
+                            or evt_data.get("source_channel")
+                            or "addisevents"
+                        )
                         post_url = f"https://t.me/s/{ch}/{post_id}"
+                    elif not post_url and platform in ("tiktok",):
+                        ch = item.get("source_channel") or evt_data.get("source_channel")
+                        post_url = f"https://www.tiktok.com/@{ch}" if ch else None
 
                     return EventDetailSchema(
                         id=full_id,
