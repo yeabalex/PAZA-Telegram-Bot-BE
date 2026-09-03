@@ -7,6 +7,7 @@ import os
 from typing import Optional
 from app.services.scraper.redis_queue import RedisQueueManager
 from app.services.llm.router import LLMRouter
+from app.services.cache.redis_event_storage import RedisEventStorage
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,10 @@ class ExtractionWorker:
         valid_events = [e for e in events_list if e and e.is_event]
         if valid_events:
             for sub_idx, event_result in enumerate(valid_events, start=1):
+                if RedisEventStorage.is_event_passed(event_result.start_datetime, event_result.end_datetime):
+                    logger.info(f"Worker [{self.worker_id}] SKIPPED: Event '{event_result.title}' has already passed.")
+                    continue
+
                 sub_task_id = task_id if len(valid_events) == 1 else f"{task_id}_{sub_idx}"
                 sources = {}
                 if post_url:

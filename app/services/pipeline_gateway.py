@@ -97,6 +97,7 @@ async def run_pipeline_gateway(
 
     scraped_posts: List[Dict[str, Any]] = []
     events_extracted_count = 0
+    passed_events_skipped_count = 0
     non_events_count = 0
     failed_transcriptions_count = 0
     failed_extractions_count = 0
@@ -138,6 +139,16 @@ async def run_pipeline_gateway(
                     for sub_idx, event_res in enumerate(events_res_list, start=1):
                         if not event_res or not event_res.is_event:
                             continue
+
+                        # Check if event date has already passed
+                        if redis_storage.is_event_passed(event_res.start_datetime, event_res.end_datetime):
+                            logger.info(
+                                f"Skipping passed event candidate: '{event_res.title}' "
+                                f"({event_res.start_datetime} to {event_res.end_datetime}) - not adding to Redis."
+                            )
+                            passed_events_skipped_count += 1
+                            continue
+
                         events_extracted_count += 1
                         extracted_event_data = {
                             "title": event_res.title,
@@ -190,6 +201,15 @@ async def run_pipeline_gateway(
             "raw_caption": raw_caption
         })
 
+    # Redis cache hygiene: Clean up any passed events from Redis store
+    cleaned_events_count = 0
+    try:
+        cleanup_res = await redis_storage.cleanup_passed_events()
+        cleaned_events_count = cleanup_res.get("cleaned_count", 0)
+        logger.info(f"Pipeline Redis hygiene cleanup: {cleaned_events_count} passed events removed.")
+    except Exception as clean_err:
+        logger.warning(f"Pipeline Redis hygiene cleanup warning: {clean_err}")
+
     await redis_storage.close()
 
     # Stage 6: Write audit output file
@@ -212,6 +232,8 @@ async def run_pipeline_gateway(
         failed_extractions=failed_extractions_count,
         output_file=output_file
     )
+    summary["passed_events_skipped"] = passed_events_skipped_count
+    summary["passed_events_cleaned"] = cleaned_events_count
 
     # Dispatch summary & JSON report to Telegram Admin Chat and delete temporary file
     await send_pipeline_telegram_report(summary, output_file)

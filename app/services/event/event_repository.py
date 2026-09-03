@@ -77,9 +77,10 @@ class EventRepository:
         category: Optional[str] = None,
         skip: int = 0,
         limit: int = 7,
+        timeframe: str = "upcoming",
     ) -> List[EventSummarySchema]:
-        """Fetch scraped events from Redis cache for Explore tab with pagination and filtering."""
-        raw_events = await redis_storage.get_all_active_events()
+        """Fetch scraped events from Redis cache for Explore tab with pagination, category filtering, and timeframe."""
+        raw_events = await redis_storage.get_all_active_events(timeframe=timeframe)
         # Sort raw_events by stored_at ISO timestamp descending (newest first)
         raw_events.sort(
             key=lambda x: x.get("stored_at") or x.get("event", {}).get("start_datetime") or "",
@@ -133,6 +134,12 @@ class EventRepository:
                 or ""
             )
 
+            is_passed = (
+                evt_data.get("is_passed")
+                if "is_passed" in evt_data
+                else redis_storage.is_event_passed(evt_data.get("start_datetime"), evt_data.get("end_datetime"))
+            )
+
             results.append(
                 EventSummarySchema(
                     id=f"{platform}:{post_id}",
@@ -146,6 +153,7 @@ class EventRepository:
                     image_url=evt_data.get("image_url") or item.get("image_url") or "",
                     source_type="scraped",
                     post_url=post_url,
+                    is_passed=bool(is_passed),
                 )
             )
 
@@ -278,6 +286,12 @@ class EventRepository:
                         ch = item.get("source_channel") or evt_data.get("source_channel")
                         post_url = f"https://www.tiktok.com/@{ch}" if ch else None
 
+                    is_passed = (
+                        evt_data.get("is_passed")
+                        if "is_passed" in evt_data
+                        else redis_storage.is_event_passed(evt_data.get("start_datetime"), evt_data.get("end_datetime"))
+                    )
+
                     return EventDetailSchema(
                         id=full_id,
                         title=evt_data.get("title", "Untitled Event"),
@@ -293,6 +307,7 @@ class EventRepository:
                         rsvp_count=real_rsvp_count,
                         source_type="scraped",
                         post_url=post_url,
+                        is_passed=bool(is_passed),
                     )
         except Exception as e:
             logger.error(f"Error reading Redis event detail: {e}")
@@ -385,6 +400,13 @@ class EventRepository:
                         except Exception:
                             pass
 
+                now_utc = datetime.now(timezone.utc)
+                is_passed = False
+                if evt.end_time:
+                    is_passed = evt.end_time < now_utc
+                elif evt.start_time:
+                    is_passed = evt.start_time < (now_utc - timedelta(hours=6))
+
                 return EventDetailSchema(
                     id=org_evt_id,
                     title=evt.title,
@@ -407,6 +429,7 @@ class EventRepository:
                     telebirr_name=t_name,
                     cbe_account=c_acc,
                     cbe_name=c_name,
+                    is_passed=bool(is_passed),
                 )
         except Exception as e:
             logger.error(f"Error reading DB organizer event detail: {e}")

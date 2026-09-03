@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.security import require_telegram_user
+from app.core.security import require_telegram_user, require_api_key
 from app.db.session import get_db
 from app.services.cache.redis_event_storage import RedisEventStorage
 from app.services.event.event_repository import EventRepository
@@ -49,23 +49,53 @@ async def list_event_categories():
     "/explore",
     response_model=List[EventResponseSchema],
     summary="List Scraped Social Media Events (Explore Tab)",
-    description="Fetches scraped Instagram/TikTok/Telegram events directly from Redis cache."
+    description="Fetches scraped Instagram/TikTok/Telegram events directly from Redis cache. Filter by timeframe ('upcoming', 'past', or 'all')."
 )
 async def list_explore_scraped_events(
     category: Optional[str] = Query(None, description="Filter events by category slug"),
+    timeframe: str = Query("upcoming", description="Filter timeframe: 'upcoming' (default), 'past', or 'all'"),
     skip: int = Query(0, ge=0, description="Number of events to skip"),
     limit: int = Query(7, ge=1, le=50, description="Max events per page"),
 ):
-    """Returns scraped events from Redis cache for Explore tab, with pagination."""
+    """Returns scraped events from Redis cache for Explore tab, with pagination and timeframe filtering."""
     try:
         return await EventRepository.list_explore_scraped_events(
             redis_storage=redis_event_storage,
             category=category,
             skip=skip,
             limit=limit,
+            timeframe=timeframe,
         )
     except Exception as e:
         logger.error(f"Failed to fetch explore events from Redis: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Redis cache service error: {str(e)}"
+        )
+
+
+@router.get(
+    "/past",
+    response_model=List[EventResponseSchema],
+    summary="List Past/Concluded Social Media Events",
+    description="Convenience endpoint returning past scraped events from Redis cache."
+)
+async def list_past_scraped_events(
+    category: Optional[str] = Query(None, description="Filter events by category slug"),
+    skip: int = Query(0, ge=0, description="Number of events to skip"),
+    limit: int = Query(7, ge=1, le=50, description="Max events per page"),
+):
+    """Returns past scraped events from Redis cache."""
+    try:
+        return await EventRepository.list_explore_scraped_events(
+            redis_storage=redis_event_storage,
+            category=category,
+            skip=skip,
+            limit=limit,
+            timeframe="past",
+        )
+    except Exception as e:
+        logger.error(f"Failed to fetch past events from Redis: {e}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Redis cache service error: {str(e)}"
@@ -467,3 +497,33 @@ async def send_event_invite(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to send invite: {str(e)}"
         )
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# SERVER-TO-SERVER MAINTENANCE ENDPOINTS (API Key required)
+# ════════════════════════════════════════════════════════════════════════════════
+
+@router.post(
+    "/cleanup",
+    summary="Clean up passed events from Redis cache",
+    description="Removes concluded events from Redis. Requires X-Api-Key header.",
+    dependencies=[Depends(require_api_key)],
+)
+async def cleanup_passed_events(
+    max_age_days: int = Query(7, description="Delete passed events older than this many days (0 deletes all passed events)"),
+):
+    """Trigger cleanup of past events from Redis."""
+    try:
+        summary = await redis_event_storage.cleanup_passed_events(max_age_days=max_age_days)
+        return {
+            "status": "success",
+            "message": f"Cleaned up {summary.get('cleaned_count', 0)} passed events (older than {max_age_days}d). {summary.get('remaining_count', 0)} active events remain.",
+            "data": summary
+        }
+    except Exception as e:
+        logger.error(f"Error during events cleanup: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to clean up events: {str(e)}"
+        )
+

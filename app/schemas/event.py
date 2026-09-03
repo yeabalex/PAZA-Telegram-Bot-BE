@@ -189,6 +189,7 @@ class EventSummarySchema(BaseModel):
     is_organizer_verified: bool = Field(False, description="Whether the organizer is platform-verified")
     organizer_events_count: Optional[int] = Field(0, description="Total events hosted by this organizer")
     post_url: Optional[str] = Field(None, description="Original social media post URL")
+    is_passed: bool = Field(False, description="Whether the event has already concluded")
 
 
 class EventDetailSchema(BaseModel):
@@ -206,6 +207,7 @@ class EventDetailSchema(BaseModel):
     rsvp_count: int = Field(0, description="Real RSVP count from event_rsvps table")
     source_type: str = Field("scraped", description="Distinction: 'scraped' vs 'organizer'")
     post_url: Optional[str] = Field(None, description="Original social media post URL")
+    is_passed: bool = Field(False, description="Whether the event has already concluded")
     organizer_name: Optional[str] = Field(None, description="Organizer name")
     organizer_username: Optional[str] = Field(None, description="Organizer @username handle")
     organizer_logo: Optional[str] = Field(None, description="Organizer logo image URL")
