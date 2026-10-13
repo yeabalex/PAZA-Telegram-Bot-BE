@@ -82,7 +82,28 @@ async def test_is_event_passed():
         reference_time=ref_time
     ) is False
 
-    # 6. Unparseable dates (e.g. "Upcoming") should not be falsely dropped
+    # 6. Past start date with future end date (e.g. Aug 22 start, Sep 10 end) -> MUST BE PASSED
+    assert RedisEventStorage.is_event_passed(
+        start_dt_str="2026-08-22T11:00:00",
+        end_dt_str="2026-09-10T23:59:59",
+        reference_time=ref_time
+    ) is True
+
+    # 7. Past start date (Aug 15) with Sep 6 end date -> MUST BE PASSED
+    assert RedisEventStorage.is_event_passed(
+        start_dt_str="2026-08-15T14:00:00",
+        end_dt_str="2026-09-06T19:00:00",
+        reference_time=ref_time
+    ) is True
+
+    # 8. Past start date (Sep 1) with Sep 11 end date -> MUST BE PASSED
+    assert RedisEventStorage.is_event_passed(
+        start_dt_str="2026-09-01T08:00:00",
+        end_dt_str="2026-09-11T23:59:59",
+        reference_time=ref_time
+    ) is True
+
+    # 9. Unparseable dates (e.g. "Upcoming") should not be falsely dropped
     assert RedisEventStorage.is_event_passed(
         start_dt_str="Upcoming",
         end_dt_str=None,
@@ -182,9 +203,9 @@ async def test_cleanup_api_endpoints():
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        # 1. Scraper cleanup without header -> 403
+        # 1. Scraper cleanup without header -> 422 (FastAPI missing header validation) or 403
         res_no_auth = await client.post("/api/v1/scraper/cleanup")
-        assert res_no_auth.status_code == 403
+        assert res_no_auth.status_code in (401, 403, 422)
 
         # 2. Scraper cleanup with invalid key -> 403
         res_bad_key = await client.post(

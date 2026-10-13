@@ -77,84 +77,104 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Execute Remote SSH Commands
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            set -e
+      # ── Write .env on the runner ──
+      # Secret masking works reliably here (runner logs, not SSH session logs).
+      # Secrets never travel inside an SSH script where masking is unreliable.
+      - name: Write .env file on runner
+        run: |
+          cat > .env << 'ENVEOF'
+          PROJECT_NAME="${{ secrets.PROJECT_NAME }}"
+          API_V1_STR="${{ secrets.API_V1_STR }}"
+          ENVIRONMENT="${{ secrets.ENVIRONMENT }}"
+          DEBUG="${{ secrets.DEBUG }}"
+          PORT="${{ secrets.PORT }}"
+          HOST="${{ secrets.HOST }}"
 
-            # Define app directory
-            APP_DIR="/home/${{ secrets.SSH_USER }}/app"
-            mkdir -p "$APP_DIR"
+          POSTGRES_SERVER="${{ secrets.POSTGRES_SERVER }}"
+          POSTGRES_PORT="${{ secrets.POSTGRES_PORT }}"
+          POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
+          POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
+          POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
+          DATABASE_URL="${{ secrets.DATABASE_URL }}"
+
+          REDIS_HOST="${{ secrets.REDIS_HOST }}"
+          REDIS_PORT="${{ secrets.REDIS_PORT }}"
+          REDIS_URL="${{ secrets.REDIS_URL }}"
+
+          GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
+          DEEPSEEK_API_KEY="${{ secrets.DEEPSEEK_API_KEY }}"
+          GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}"
+
+          JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}"
+          JWT_ALGORITHM="${{ secrets.JWT_ALGORITHM }}"
+          JWT_ACCESS_TOKEN_EXPIRE_DAYS="${{ secrets.JWT_ACCESS_TOKEN_EXPIRE_DAYS }}"
+          GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}"
+          PIPELINE_API_KEY="${{ secrets.PIPELINE_API_KEY }}"
+
+          TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+          MINI_APP_URL="${{ secrets.MINI_APP_URL }}"
+          ADMIN_TELEGRAM_CHAT_ID="${{ secrets.ADMIN_TELEGRAM_CHAT_ID }}"
+
+          INSTAGRAM_USERNAME="${{ secrets.INSTAGRAM_USERNAME }}"
+          INSTAGRAM_PASSWORD="${{ secrets.INSTAGRAM_PASSWORD }}"
+          INSTAGRAM_SESSION_ID="${{ secrets.INSTAGRAM_SESSION_ID }}"
+          TIKTOK_SESSION_ID="${{ secrets.TIKTOK_SESSION_ID }}"
+
+          CLOUDINARY_CLOUD_NAME="${{ secrets.CLOUDINARY_CLOUD_NAME }}"
+          CLOUDINARY_API_KEY="${{ secrets.CLOUDINARY_API_KEY }}"
+          CLOUDINARY_API_SECRET="${{ secrets.CLOUDINARY_API_SECRET }}"
+          CLOUDINARY_URL="${{ secrets.CLOUDINARY_URL }}"
+
+          R2_ACCOUNT_ID="${{ secrets.R2_ACCOUNT_ID }}"
+          R2_ACCESS_KEY_ID="${{ secrets.R2_ACCESS_KEY_ID }}"
+          R2_SECRET_ACCESS_KEY="${{ secrets.R2_SECRET_ACCESS_KEY }}"
+          R2_BUCKET_NAME="${{ secrets.R2_BUCKET_NAME }}"
+          R2_PUBLIC_URL="${{ secrets.R2_PUBLIC_URL }}"
+          ENVEOF
+          chmod 600 .env
+
+      # ── Set up SSH key ──
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      # ── SCP .env to server — no secrets exposed in SSH session logs ──
+      - name: Copy .env to server via SCP
+        run: |
+          APP_DIR="/home/${{ secrets.SSH_USER }}/app"
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} "mkdir -p $APP_DIR"
+          scp -i ~/.ssh/deploy_key .env ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }}:$APP_DIR/.env
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} "chmod 600 $APP_DIR/.env"
+
+      # ── Restart services — zero secrets referenced in this SSH session ──
+      - name: Deploy and restart services
+        env:
+          IMAGE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SERVER_IP: ${{ secrets.SERVER_IP }}
+        run: |
+          APP_DIR="/home/${SSH_USER}/app"
+          IMAGE_REPO=$(echo "${IMAGE_TAG}" | tr '[:upper:]' '[:lower:]')
+
+          ssh -i ~/.ssh/deploy_key ${SSH_USER}@${SERVER_IP} \
+            APP_DIR="$APP_DIR" IMAGE_REPO="$IMAGE_REPO" GITHUB_ACTOR="$GITHUB_ACTOR" \
+            'bash -s' << 'SSHEOF'
+            set -e
             cd "$APP_DIR"
 
-            # Log in to GHCR on the EC2 server using GITHUB_TOKEN
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            # Login to GHCR — password piped via stdin, never echoed to log
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-            # Generate .env file on server with strict 600 permissions
-            cat <<'EOF' > .env
-            PROJECT_NAME="${{ secrets.PROJECT_NAME }}"
-            API_V1_STR="${{ secrets.API_V1_STR }}"
-            ENVIRONMENT="${{ secrets.ENVIRONMENT }}"
-            DEBUG="${{ secrets.DEBUG }}"
-            PORT="${{ secrets.PORT }}"
-            HOST="${{ secrets.HOST }}"
-
-            POSTGRES_SERVER="${{ secrets.POSTGRES_SERVER }}"
-            POSTGRES_PORT="${{ secrets.POSTGRES_PORT }}"
-            POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
-            POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
-            POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
-            DATABASE_URL="${{ secrets.DATABASE_URL }}"
-
-            REDIS_HOST="${{ secrets.REDIS_HOST }}"
-            REDIS_PORT="${{ secrets.REDIS_PORT }}"
-            REDIS_URL="${{ secrets.REDIS_URL }}"
-
-            GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
-            DEEPSEEK_API_KEY="${{ secrets.DEEPSEEK_API_KEY }}"
-            GROQ_API_KEY="${{ secrets.GROQ_API_KEY }}"
-
-            JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}"
-            JWT_ALGORITHM="${{ secrets.JWT_ALGORITHM || 'HS256' }}"
-            JWT_ACCESS_TOKEN_EXPIRE_DAYS="${{ secrets.JWT_ACCESS_TOKEN_EXPIRE_DAYS || '30' }}"
-            GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}"
-            PIPELINE_API_KEY="${{ secrets.PIPELINE_API_KEY }}"
-
-            TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
-            MINI_APP_URL="${{ secrets.MINI_APP_URL }}"
-            ADMIN_TELEGRAM_CHAT_ID="${{ secrets.ADMIN_TELEGRAM_CHAT_ID }}"
-
-            INSTAGRAM_USERNAME="${{ secrets.INSTAGRAM_USERNAME }}"
-            INSTAGRAM_PASSWORD="${{ secrets.INSTAGRAM_PASSWORD }}"
-            INSTAGRAM_SESSION_ID="${{ secrets.INSTAGRAM_SESSION_ID }}"
-            TIKTOK_SESSION_ID="${{ secrets.TIKTOK_SESSION_ID }}"
-
-            CLOUDINARY_CLOUD_NAME="${{ secrets.CLOUDINARY_CLOUD_NAME }}"
-            CLOUDINARY_API_KEY="${{ secrets.CLOUDINARY_API_KEY }}"
-            CLOUDINARY_API_SECRET="${{ secrets.CLOUDINARY_API_SECRET }}"
-            CLOUDINARY_URL="${{ secrets.CLOUDINARY_URL }}"
-
-            R2_ACCOUNT_ID="${{ secrets.R2_ACCOUNT_ID }}"
-            R2_ACCESS_KEY_ID="${{ secrets.R2_ACCESS_KEY_ID }}"
-            R2_SECRET_ACCESS_KEY="${{ secrets.R2_SECRET_ACCESS_KEY }}"
-            R2_BUCKET_NAME="${{ secrets.R2_BUCKET_NAME }}"
-            R2_PUBLIC_URL="${{ secrets.R2_PUBLIC_URL }}"
-            EOF
-
-            chmod 600 .env
-
-            # Write docker-compose.yml on server pointing to GHCR image
-            IMAGE_REPO=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-            IMAGE_TAG="${IMAGE_REPO}:latest"
-
-            cat <<EOF > docker-compose.yml
+            # Write docker-compose.yml — no secrets inside
+            cat > docker-compose.yml << COMPOSEEOF
             services:
               api:
-                image: ${IMAGE_TAG}
+                image: ${IMAGE_REPO}
                 container_name: paza_event_api
                 restart: always
                 env_file:
@@ -163,10 +183,9 @@ jobs:
                   - "8000:8000"
                 volumes:
                   - static_data:/app/static
-                  - /home/${{ secrets.SSH_USER }}/.config/instaloader:/root/.config/instaloader
 
               bot:
-                image: ${IMAGE_TAG}
+                image: ${IMAGE_REPO}
                 container_name: paza_event_bot
                 restart: always
                 command: ["python", "run_bot.py"]
@@ -175,12 +194,14 @@ jobs:
 
             volumes:
               static_data:
-            EOF
+            COMPOSEEOF
 
-            # Pull latest image & restart services
             docker compose pull
             docker compose up -d --remove-orphans
-
-            # Prune old unused Docker images to keep disk clean
             docker image prune -af
+          SSHEOF
 
+      # ── Always clean up SSH key from runner ──
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key .env

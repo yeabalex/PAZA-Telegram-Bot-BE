@@ -57,29 +57,52 @@ class RedisEventStorage:
         end_dt_str: Optional[str],
         reference_time: Optional[datetime] = None
     ) -> bool:
-        """Determine if an event has already concluded based on end_datetime or start_datetime.
+        """Determine if an event has already concluded based on start_datetime and end_datetime.
         
         Rules:
-        1. If end_datetime is provided and parseable, check if parsed end_datetime < reference_time.
-        2. If only start_datetime is provided:
-           - If date-only format (YYYY-MM-DD), event is considered active until end of that day (23:59:59 EAT).
-           - If datetime format, event is considered active until 23:59:59 of that day or start + 4h (whichever is later).
-           - If that effective cutoff < reference_time, the event has passed.
-        3. If neither datetime is parseable (e.g. 'Upcoming', None), do NOT consider it passed.
+        1. If end_datetime has already passed (parsed_end < now):
+           -> TRUE (event has concluded).
+        2. If start_datetime is parseable:
+           - If start date is strictly before today (parsed_start.date() < now.date()):
+             -> TRUE (event date has passed; belongs in past events archive).
+           - If start date is today (parsed_start.date() == now.date()):
+             * If parsed_end and parsed_end < now: -> TRUE (concluded earlier today).
+             * If not parsed_end and (parsed_start + timedelta(hours=6)) < now: -> TRUE (concluded earlier today).
+             * Otherwise: -> FALSE (active today).
+           - If start date is in the future (parsed_start.date() > now.date()):
+             -> FALSE (upcoming event).
+        3. If only end_datetime is available:
+           -> parsed_end < now.
+        4. If neither is parseable:
+           -> FALSE (cannot verify it has passed).
         """
         now = reference_time or datetime.now(EAT_TIMEZONE)
         if now.tzinfo is None:
             now = now.replace(tzinfo=EAT_TIMEZONE)
 
+        parsed_start = parse_iso_datetime(start_dt_str)
         parsed_end = parse_iso_datetime(end_dt_str)
+
+        # 1. If end_datetime has already passed, it is definitely concluded
+        if parsed_end and parsed_end < now:
+            return True
+
+        # 2. If start_datetime is before today, its date has already passed
+        if parsed_start:
+            if parsed_start.date() < now.date():
+                return True
+            if parsed_start.date() == now.date():
+                if parsed_end and parsed_end < now:
+                    return True
+                if not parsed_end and (parsed_start + timedelta(hours=6)) < now:
+                    return True
+                return False
+            # Future event date (tomorrow or later)
+            return False
+
+        # 3. If only end_datetime was available
         if parsed_end:
             return parsed_end < now
-
-        parsed_start = parse_iso_datetime(start_dt_str)
-        if parsed_start:
-            end_of_day = parsed_start.replace(hour=23, minute=59, second=59, microsecond=0)
-            effective_end = max(end_of_day, parsed_start + timedelta(hours=4))
-            return effective_end < now
 
         return False
 

@@ -81,11 +81,19 @@ class EventRepository:
     ) -> List[EventSummarySchema]:
         """Fetch scraped events from Redis cache for Explore tab with pagination, category filtering, and timeframe."""
         raw_events = await redis_storage.get_all_active_events(timeframe=timeframe)
-        # Sort raw_events by stored_at ISO timestamp descending (newest first)
-        raw_events.sort(
-            key=lambda x: x.get("stored_at") or x.get("event", {}).get("start_datetime") or "",
-            reverse=True
-        )
+        # Sort raw_events:
+        # For upcoming: sort chronologically (soonest event first)
+        # For past: sort reverse-chronologically (most recently concluded first)
+        if timeframe == "upcoming":
+            raw_events.sort(
+                key=lambda x: x.get("event", {}).get("start_datetime") or "9999-99-99",
+                reverse=False
+            )
+        else:
+            raw_events.sort(
+                key=lambda x: x.get("event", {}).get("start_datetime") or x.get("stored_at") or "",
+                reverse=True
+            )
         results: List[EventSummarySchema] = []
 
         for item in raw_events:
@@ -134,10 +142,9 @@ class EventRepository:
                 or ""
             )
 
-            is_passed = (
-                evt_data.get("is_passed")
-                if "is_passed" in evt_data
-                else redis_storage.is_event_passed(evt_data.get("start_datetime"), evt_data.get("end_datetime"))
+            is_passed = redis_storage.is_event_passed(
+                evt_data.get("start_datetime"),
+                evt_data.get("end_datetime")
             )
 
             results.append(
@@ -286,10 +293,9 @@ class EventRepository:
                         ch = item.get("source_channel") or evt_data.get("source_channel")
                         post_url = f"https://www.tiktok.com/@{ch}" if ch else None
 
-                    is_passed = (
-                        evt_data.get("is_passed")
-                        if "is_passed" in evt_data
-                        else redis_storage.is_event_passed(evt_data.get("start_datetime"), evt_data.get("end_datetime"))
+                    is_passed = redis_storage.is_event_passed(
+                        evt_data.get("start_datetime"),
+                        evt_data.get("end_datetime")
                     )
 
                     return EventDetailSchema(
